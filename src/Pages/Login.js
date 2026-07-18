@@ -977,7 +977,7 @@ const LoginPage = () => {
         sessionStorage.setItem('userRole', data.data.staff.role);
         
         setScreen('done');
-        setTimeout(() => navigate('/staff-dashboard'), 2000);
+        setTimeout(() => navigate('/dashboard'), 2000);
       } else {
         setScreen('password');
         setError('Face verified but login failed. Please enter your password.');
@@ -1037,7 +1037,7 @@ const LoginPage = () => {
         sessionStorage.setItem('userRole', data.data.staff.role);
         
         setScreen('done');
-        setTimeout(() => navigate('/staff-dashboard'), 2000);
+        setTimeout(() => navigate('/dashboard'), 2000);
       } else {
         setError(data.message || 'Invalid password. Please try again.');
       }

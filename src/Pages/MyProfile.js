@@ -607,7 +607,7 @@ const style = `
   .error-container{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:20px;}
 `;
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = 'https://pmsbackend.pixelmindsolutions.com/api';
 
 const StaffMyProfile = () => {
   const [loading, setLoading] = useState(true);
