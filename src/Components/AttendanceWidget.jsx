@@ -5,8 +5,7 @@ import {
 } from 'react-icons/fi';
 
 const API_BASE_CANDIDATES = [
-  'https://pmsbackend.pixelmindsolutions.com/api',
-  'http://localhost:5000/api'
+  'https://pmsbackend.pixelmindsolutions.com/api'
 ];
 
 export const getApiBaseUrl = () => {

@@ -91,7 +91,7 @@ const Sidebar = ({ isCollapsed, isMobile, setIsCollapsed }) => {
     
     {
       icon: "ri-time-fill", name: "Attendance", dropdown: [
-        { name: "Punch In/Out", path: "/punch" },
+        // { name: "Punch In/Out", path: "/punch" },
         { name: "Attendance History", path: "/attendance" },
         { name: "Monthly Report", path: "/report" },
       ]
