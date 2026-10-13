@@ -96,55 +96,55 @@ const Sidebar = ({ isCollapsed, isMobile, setIsCollapsed }) => {
         { name: "Monthly Report", path: "/report" },
       ]
     },
-    {
-      icon: "ri-task-fill", name: "Tasks", dropdown: [
-        { name: "My Tasks", path: "/mytasks" },
-        { name: "Task History", path: "/taskhistory" },
-        { name: "Performance", path: "/myperformance" },
-      ]
-    },
-    {
-      icon: "ri-calendar-event-fill", name: "Leave", dropdown: [
-        { name: "Apply Leave", path: "/applyleave" },
-        { name: "Leave Balance", path: "/leavebalance" },
-        { name: "Leave History", path: "/leavehistory" },
-      ]
-    },
-    {
-      icon: "ri-money-dollar-circle-fill", name: "Salary", dropdown: [
-        { name: "Salary Slips", path: "/salaryslip" },
-      ]
-    },
-    {
-      icon: "ri-bar-chart-fill", name: "Performance", dropdown: [
-        { name: "Performance Report", path: "/performancereport" },
-        { name: "KPI Metrics", path: "/kpi" },
-        { name: "Goals", path: "/goals" },
-      ]
-    },
-    {
-      icon: "ri-team-fill", name: "Team", dropdown: [
-        { name: "Team Members", path: "/teammembers" },
-        { name: "Team Projects", path: "/teamprojects" },
-      ]
-    },
+    // {
+    //   icon: "ri-task-fill", name: "Tasks", dropdown: [
+    //     { name: "My Tasks", path: "/mytasks" },
+    //     { name: "Task History", path: "/taskhistory" },
+    //     { name: "Performance", path: "/myperformance" },
+    //   ]
+    // },
+    // {
+    //   icon: "ri-calendar-event-fill", name: "Leave", dropdown: [
+    //     { name: "Apply Leave", path: "/applyleave" },
+    //     { name: "Leave Balance", path: "/leavebalance" },
+    //     { name: "Leave History", path: "/leavehistory" },
+    //   ]
+    // },
+    // {
+    //   icon: "ri-money-dollar-circle-fill", name: "Salary", dropdown: [
+    //     { name: "Salary Slips", path: "/salaryslip" },
+    //   ]
+    // },
+    // {
+    //   icon: "ri-bar-chart-fill", name: "Performance", dropdown: [
+    //     { name: "Performance Report", path: "/performancereport" },
+    //     { name: "KPI Metrics", path: "/kpi" },
+    //     { name: "Goals", path: "/goals" },
+    //   ]
+    // },
+    // {
+    //   icon: "ri-team-fill", name: "Team", dropdown: [
+    //     { name: "Team Members", path: "/teammembers" },
+    //     { name: "Team Projects", path: "/teamprojects" },
+    //   ]
+    // },
     // {
     //   icon: "ri-message-circle-fill", name: "Team Chat", path: "/teamchat" 
     // },
-    {
-      icon: "ri-file-text-fill", name: "Documents", dropdown: [
-        { name: "My Documents", path: "/mydocuments" },
-        { name: "Upload Documents", path: "/upload-documents" },
-      ]
-    },
+    // {
+    //   icon: "ri-file-text-fill", name: "Documents", dropdown: [
+    //     { name: "My Documents", path: "/mydocuments" },
+    //     { name: "Upload Documents", path: "/upload-documents" },
+    //   ]
+    // },
     { icon: "ri-user-fill", name: "My Profile", path: "/myprofile" },
-    {
-      icon: "ri-settings-3-fill", name: "Settings", dropdown: [
-        { name: "Profile Settings", path: "/profile-settings" },
-        { name: "Change Password", path: "/change-password" },
-        { name: "Notifications", path: "/staff-notifications" },
-      ]
-    },
+    // {
+    //   icon: "ri-settings-3-fill", name: "Settings", dropdown: [
+    //     { name: "Profile Settings", path: "/profile-settings" },
+    //     { name: "Change Password", path: "/change-password" },
+    //     { name: "Notifications", path: "/staff-notifications" },
+    //   ]
+    // },
     { icon: "ri-logout-box-fill", name: "Logout", action: handleLogout },
   ];
 

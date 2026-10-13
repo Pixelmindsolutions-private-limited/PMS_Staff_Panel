@@ -114,6 +114,7 @@ import Goals from "./Pages/Goals.js";
 import TeamProjects from "./Pages/TeamProjects.js";
 import TeamMembers from "./Pages/TeamMembers.js";
 import MyDocuments from "./Pages/MyDocuments.js";
+import PunchWidgetPopup from "./Pages/PunchWidgetPopup.js";
 
 
 
@@ -123,6 +124,8 @@ function App() {
     <Routes>
       {/* Login page rendered outside AdminLayout */}
       <Route path="/" element={<LoginPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/punch-widget" element={<PunchWidgetPopup />} />
 
       {/* All other routes inside AdminLayout */}
       <Route

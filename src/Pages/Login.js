@@ -736,6 +736,27 @@ import { useNavigate } from 'react-router-dom';
 
 const API_BASE = 'https://pmsbackend.pixelmindsolutions.com/api';
 
+const syncToDesktopWidget = (payload) => {
+  try {
+    const raw = JSON.stringify(payload);
+    localStorage.setItem('staffDetails', raw);
+    sessionStorage.setItem('staffDetails', raw);
+    fetch('http://127.0.0.1:48999/login-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: raw
+    }).catch(() => {
+      try {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = 'pms-widget://open';
+        document.body.appendChild(iframe);
+        setTimeout(() => iframe.remove(), 1500);
+      } catch (_) {}
+    });
+  } catch (_) {}
+};
+
 const LoginPage = () => {
   const navigate = useNavigate();
 
@@ -962,12 +983,13 @@ const LoginPage = () => {
       const data = await response.json();
 
       if (data.success) {
-        // Store login data in session storage
-        sessionStorage.setItem('staffDetails', JSON.stringify({
+        const authPayload = {
           token: data.data.token,
           user: data.data.staff,
           type: 'staff'
-        }));
+        };
+        sessionStorage.setItem('staffDetails', JSON.stringify(authPayload));
+        syncToDesktopWidget(authPayload);
         
         // Also store individual items for easy access
         sessionStorage.setItem('token', data.data.token);
@@ -1022,12 +1044,13 @@ const LoginPage = () => {
       const data = await response.json();
 
       if (data.success) {
-        // Store login data in session storage
-        sessionStorage.setItem('staffDetails', JSON.stringify({
+        const authPayload = {
           token: data.data.token,
           user: data.data.staff,
           type: 'staff'
-        }));
+        };
+        sessionStorage.setItem('staffDetails', JSON.stringify(authPayload));
+        syncToDesktopWidget(authPayload);
         
         // Also store individual items for easy access
         sessionStorage.setItem('token', data.data.token);

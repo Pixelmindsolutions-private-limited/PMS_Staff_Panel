@@ -881,6 +881,8 @@ const StaffPunchInOut = () => {
   const punchInTimeRef = useRef(null);
   const idleTimeRef = useRef(0);
   const lastActivityTimeRef = useRef(Date.now());
+  const workingSecondsRef = useRef(0);
+  const lastHumanActivityReportRef = useRef(0);
 
   // Check authentication on mount
   useEffect(() => {
@@ -905,6 +907,27 @@ const StaffPunchInOut = () => {
     loadTodayTimeline(details.token, details.user.employeeId);
     checkCurrentStatus(details.token, details.user.employeeId);
   }, [navigate]);
+
+  // Refresh status on tab focus / visibility
+  useEffect(() => {
+    const handleFocus = () => {
+      const storedDetails = sessionStorage.getItem('staffDetails');
+      if (!storedDetails || document.visibilityState === 'hidden') return;
+      try {
+        const details = JSON.parse(storedDetails);
+        if (details.token && details.user?.employeeId) {
+          checkCurrentStatus(details.token, details.user.employeeId);
+          loadTodayTimeline(details.token, details.user.employeeId);
+        }
+      } catch (_) {}
+    };
+    document.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [authToken, employeeId]);
 
   // API helper with auth
   const apiCall = async (endpoint, method = 'GET', body = null) => {
@@ -994,10 +1017,14 @@ const StaffPunchInOut = () => {
           const totalBreakHours = parseFloat(data.data.summary.totalBreakHours) || 0;
           const totalIdleTime = data.data.summary.idleTime || 0;
           const productivity = data.data.summary.productivity || 0;
+          const totalWorkSec = data.data.summary.totalWorkSeconds !== undefined
+            ? Number(data.data.summary.totalWorkSeconds)
+            : Math.round(totalWorkHours * 3600);
+          workingSecondsRef.current = totalWorkSec;
           
           setWorkStats({
-            totalHours: totalWorkHours + totalBreakHours,
-            effectiveHours: totalWorkHours,
+            totalHours: (totalWorkHours + totalBreakHours).toFixed(2),
+            effectiveHours: totalWorkHours.toFixed(2),
             idleTime: totalIdleTime,
             teaBreakCount: data.data.breaks?.filter(b => b.title === 'Tea Break').length || 0,
             lunchBreakCount: data.data.breaks?.filter(b => b.title === 'Lunch Break').length || 0,
@@ -1016,17 +1043,41 @@ const StaffPunchInOut = () => {
     try {
       const data = await apiCall(`/work-session/summary/${empId}`, 'GET', null);
       if (data.success && data.data) {
-        if (data.data.status === 'working' || data.data.status === 'idle' || data.data.status === 'on_break') {
-          setPunchStatus('in');
+        const status = String(data.data.status || '').toLowerCase();
+        if (status === 'working' || status === 'idle' || status === 'on_break') {
+          setPunchStatus(status === 'on_break' ? 'break' : 'in');
           punchInTimeRef.current = new Date(data.data.startTime).getTime();
+          setSessionId(data.data.sessionId || null);
+
+          // Restore exact accumulated work duration from backend
+          const totalSec = data.data.totalWorkSeconds !== undefined
+            ? Number(data.data.totalWorkSeconds)
+            : Math.round((Number(data.data.totalWorkDuration) || 0) * 60);
+          workingSecondsRef.current = totalSec;
+          setWorkStats(prev => ({
+            ...prev,
+            effectiveHours: (totalSec / 3600).toFixed(2),
+            totalHours: ((totalSec + ((Number(prev.totalBreakHours) || 0) * 3600)) / 3600).toFixed(2),
+            idleTime: Number(data.data.totalIdleTime) || 0,
+            totalBreakHours: Number(data.data.totalBreakHours) || 0
+          }));
+
           startHeartbeat();
-          
+
+          if (status === 'idle') {
+            setShowIdlePopup(true);
+          } else {
+            setShowIdlePopup(false);
+          }
+
           // Check if on break
-          if (data.data.status === 'on_break') {
-            setPunchStatus('break');
-            // Fetch break info from active employees endpoint or separate call
+          if (status === 'on_break') {
             await checkBreakStatus(token, empId);
           }
+        } else if (status === 'completed') {
+          setPunchStatus('out');
+          setShowIdlePopup(false);
+          punchInTimeRef.current = null;
         }
       }
     } catch (error) {
@@ -1059,7 +1110,8 @@ const StaffPunchInOut = () => {
           
           await apiCall('/work-session/heartbeat', 'POST', {
             employeeId,
-            isIdle: isIdle
+            isIdle: isIdle,
+            activityType: 'heartbeat'
           });
         } catch (error) {
           console.error('Heartbeat error:', error);
@@ -1081,6 +1133,10 @@ const StaffPunchInOut = () => {
       setPunchStatus('in');
       setSessionId(data.data.sessionId);
       punchInTimeRef.current = new Date(data.data.startTime).getTime();
+      const initialSec = data.data.totalWorkSeconds !== undefined
+        ? Number(data.data.totalWorkSeconds)
+        : Math.round((Number(data.data.totalWorkDuration) || 0) * 60);
+      workingSecondsRef.current = initialSec;
       startHeartbeat();
       await loadTodayTimeline(authToken, employeeId);
       
@@ -1146,13 +1202,36 @@ const StaffPunchInOut = () => {
     }
   };
 
-  // Activity tracking for idle detection
+  // Activity tracking for idle detection (keyboard + mouse)
   useEffect(() => {
-    const handleActivity = () => {
-      lastActivityTimeRef.current = Date.now();
-      setShowIdlePopup(false);
-      setIdleTime(0);
-      
+    const handleActivity = async () => {
+      const now = Date.now();
+      lastActivityTimeRef.current = now;
+
+      // When user is idle or popup is open, report human activity to backend
+      if (showIdlePopup && punchStatus === 'in' && !breakInfo) {
+        if (now - lastHumanActivityReportRef.current >= 1500 && employeeId && authToken) {
+          lastHumanActivityReportRef.current = now;
+          try {
+            const res = await apiCall('/work-session/report-idle', 'POST', {
+              employeeId,
+              activityType: 'human'
+            });
+            if (res?.success) {
+              setShowIdlePopup(false);
+              setIdleTime(0);
+              if (res.data?.totalWorkSeconds !== undefined) {
+                workingSecondsRef.current = res.data.totalWorkSeconds;
+              } else if (res.data?.totalWorkDuration !== undefined) {
+                workingSecondsRef.current = Math.round(res.data.totalWorkDuration * 60);
+              }
+            }
+          } catch (err) {
+            console.error('Error reporting human activity:', err);
+          }
+        }
+      }
+
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       idleTimerRef.current = setTimeout(() => {
         if (punchStatus === 'in' && !breakInfo) {
@@ -1161,22 +1240,21 @@ const StaffPunchInOut = () => {
         }
       }, 60000);
     };
-    
-    ['mousemove', 'keypress', 'click', 'scroll', 'touchstart'].forEach(e => 
-      window.addEventListener(e, handleActivity)
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'keyup', 'click', 'scroll', 'touchstart'];
+    events.forEach(e =>
+      window.addEventListener(e, handleActivity, { passive: true })
     );
-    
-    handleActivity();
-    
+
     return () => {
-      ['mousemove', 'keypress', 'click', 'scroll', 'touchstart'].forEach(e => 
-        window.removeEventListener(e, handleActivity)
+      events.forEach(e =>
+        window.removeEventListener(e, handleActivity, { passive: true })
       );
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       if (activityTimerRef.current) clearInterval(activityTimerRef.current);
       if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
     };
-  }, [punchStatus, breakInfo]);
+  }, [punchStatus, breakInfo, showIdlePopup, employeeId, authToken]);
 
   const startIdleTracking = () => {
     if (activityTimerRef.current) clearInterval(activityTimerRef.current);
@@ -1192,14 +1270,22 @@ const StaffPunchInOut = () => {
     setShowIdlePopup(false);
     setIdleTime(0);
     lastActivityTimeRef.current = Date.now();
-    
+
     try {
-      await apiCall('/work-session/heartbeat', 'POST', {
+      const data = await apiCall('/work-session/handle-idle', 'POST', {
         employeeId,
-        isIdle: false
+        action: 'continue'
       });
+      if (data?.data) {
+        if (data.data.totalWorkSeconds !== undefined) {
+          workingSecondsRef.current = data.data.totalWorkSeconds;
+        } else if (data.data.totalWorkDuration !== undefined) {
+          workingSecondsRef.current = Math.round(data.data.totalWorkDuration * 60);
+        }
+      }
+      setPunchStatus('in');
     } catch (error) {
-      console.error('Error reporting activity:', error);
+      console.error('Error resuming work:', error);
     }
   };
 
@@ -1212,33 +1298,33 @@ const StaffPunchInOut = () => {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-      
-      if (punchStatus === 'in' && punchInTimeRef.current && !breakInfo) {
-        const totalMs = Date.now() - punchInTimeRef.current;
-        const totalHours = totalMs / 3_600_000;
-        const effectiveHours = (totalMs - idleTimeRef.current) / 3_600_000;
-        
+
+      // Increment work timer only when actively working (not idle, not on break)
+      if (punchStatus === 'in' && !showIdlePopup && !breakInfo) {
+        workingSecondsRef.current += 1;
+        const totalSec = workingSecondsRef.current;
+        const effHours = (totalSec / 3600).toFixed(2);
+
         setWorkStats(prev => ({
           ...prev,
-          totalHours: totalHours.toFixed(2),
-          effectiveHours: effectiveHours.toFixed(2),
+          effectiveHours: effHours,
+          totalHours: ((totalSec + ((parseFloat(prev.totalBreakHours) || 0) * 3600)) / 3600).toFixed(2),
         }));
       }
-      
+
       // Update break timer if on break
       if (breakInfo && breakInfo.breakEndTime) {
         const remaining = Math.ceil((new Date(breakInfo.breakEndTime) - new Date()) / 60000);
         if (remaining <= 0) {
-          // Break should have ended, refresh status
           checkCurrentStatus(authToken, employeeId);
           setBreakInfo(null);
           setPunchStatus('in');
         }
       }
     }, 1000);
-    
+
     return () => clearInterval(timer);
-  }, [punchStatus, breakInfo, authToken, employeeId]);
+  }, [punchStatus, showIdlePopup, breakInfo, authToken, employeeId]);
 
   const efficiency = workStats.productivity || (workStats.totalHours > 0 
     ? Math.round((workStats.effectiveHours / workStats.totalHours) * 100) 
@@ -1308,7 +1394,7 @@ const StaffPunchInOut = () => {
                 onClick={handleResumeWork}
                 className="w-full bg-gradient-to-r from-teal-500 to-teal-600 text-white py-3 rounded-xl font-bold shadow-md hover:shadow-lg transition-all duration-200"
               >
-                I'm Back! Let's Work 💪
+                I'm Back to Cart
               </button>
             </div>
           </div>

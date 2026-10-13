@@ -1,0 +1,37 @@
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNzQ3MWM0NDQ1YWM2NWUyNjRjMGMxOCIsImVtcGxveWVlSWQiOiJQTVMwMzAxIiwicm9sZSI6IkdyYXBoaWMgRGVzaWduZXIiLCJ0eXBlIjoic3RhZmYiLCJpYXQiOjE3OTE4ODYwMDEsImV4cCI6MTc5MjQ5MDgwMX0.JsKYI2nv13wZESLhHdRCdVoqSJpRIVJpue6CtNin5oU",
+  "user": {
+    "_id": "6a7471c4445ac65e264c0c18",
+    "employeeId": "PMS0301",
+    "employeeName": "Kareem Unnisa",
+    "role": "Graphic Designer",
+    "mobile": "9182636673",
+    "email": "pixelmindskareemunnisa@gmail.com",
+    "joiningDate": "2026-03-01T00:00:00.000Z",
+    "bloodGroup": "B+",
+    "adminEmail": null,
+    "adminPanelPassword": null,
+    "isAdminPanelAccess": false,
+    "isActive": true,
+    "profileImage": "https://pmsbackend.pixelmindsolutions.com/uploads/staff/profile/PMS0301_profile_1786016196794.jpg",
+    "idCardImage": "https://pmsbackend.pixelmindsolutions.com/uploads/staff/idcards/PMS0301_idcard_1786016196794.jpg",
+    "lastActive": "2026-10-13T09:49:53.310Z",
+    "address": {
+      "street": "Road No.4, MIG-302, Remedy Hospital Ln, opp. Subbaiah Gari Hotel",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "pincode": "500072",
+      "country": "India"
+    },
+    "emergencyContact": {
+      "name": "Saquiba Wasi",
+      "relation": "Sister",
+      "mobile": "8521630432"
+    },
+    "createdAt": "2026-08-06T11:36:36.800Z",
+    "updatedAt": "2026-10-13T09:49:53.311Z",
+    "__v": 0,
+    "gender": "Female"
+  },
+  "type": "staff"
+}
