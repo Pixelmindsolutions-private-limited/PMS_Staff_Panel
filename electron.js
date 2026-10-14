@@ -8,6 +8,59 @@ let fallbackServer = null;
 let isCompact = false;
 let keyboardActivityHook = null;
 
+function focusWidgetWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function storeAndBroadcastAuth(payload) {
+  if (!payload?.token || !payload?.user) return;
+  try {
+    fs.writeFileSync(
+      path.join(app.getPath('userData'), 'persisted_auth.json'),
+      JSON.stringify(payload, null, 2)
+    );
+  } catch (error) {
+    console.warn('Could not persist synced staff login:', error.message);
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('auth-sync', payload);
+    focusWidgetWindow();
+  }
+}
+
+function handleWidgetProtocol(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== 'pms-widget:') return;
+    if (url.hostname === 'sync') {
+      const syncId = url.pathname.replace(/^\/+/, '');
+      if (!/^[a-f0-9]{48}$/.test(syncId)) return;
+      const request = http.get(`https://pmsbackend.pixelmindsolutions.com/login-sync/pending/${syncId}`, (response) => {
+        let body = '';
+        response.setEncoding('utf8');
+        response.on('data', chunk => { body += chunk; });
+        response.on('end', () => {
+          try {
+            const result = JSON.parse(body);
+            if (response.statusCode === 200 && result.success) {
+              storeAndBroadcastAuth(result.data);
+            }
+          } catch (error) {
+            console.warn('Could not read staff login sync response:', error.message);
+          }
+        });
+      });
+      request.setTimeout(5000, () => request.destroy(new Error('Login sync request timed out')));
+      request.on('error', error => console.warn('Desktop staff sync failed:', error.message));
+      return;
+    }
+    focusWidgetWindow();
+  } catch (_) {}
+}
+
 const MIME_TYPES = {
   '.html': 'text/html',
   '.js': 'text/javascript',
@@ -170,12 +223,14 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
+  app.on('second-instance', (_event, commandLine) => {
+    const protocolUrl = commandLine.find(value => value.startsWith('pms-widget://'));
+    if (protocolUrl) handleWidgetProtocol(protocolUrl);
+    else focusWidgetWindow();
+  });
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    handleWidgetProtocol(url);
   });
 
   // IPC Handlers for window controls
@@ -229,62 +284,6 @@ if (!gotTheLock) {
     // Disabled: no employee is permitted to close the widget
   });
 
-  let localSyncServer = null;
-  function startLocalSyncServer() {
-    try {
-      localSyncServer = http.createServer((req, res) => {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-        res.setHeader('Access-Control-Allow-Private-Network', 'true');
-
-        if (req.method === 'OPTIONS') {
-          res.writeHead(200);
-          return res.end();
-        }
-
-        if (req.url === '/ping') {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify({ running: true }));
-        }
-
-        if (req.url === '/login-sync' && req.method === 'POST') {
-          let body = '';
-          req.on('data', chunk => { body += chunk; });
-          req.on('end', () => {
-            try {
-              const data = JSON.parse(body);
-              try {
-                fs.writeFileSync(path.join(app.getPath('userData'), 'persisted_auth.json'), JSON.stringify(data, null, 2));
-              } catch (_) {}
-              if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.webContents.send('auth-sync', data);
-                if (mainWindow.isMinimized()) mainWindow.restore();
-                mainWindow.show();
-                mainWindow.focus();
-              }
-              res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ success: true }));
-            } catch (err) {
-              res.writeHead(400);
-              res.end(JSON.stringify({ error: err.message }));
-            }
-          });
-          return;
-        }
-
-        res.writeHead(404);
-        res.end();
-      });
-
-      localSyncServer.on('error', (err) => {
-        console.warn('Sync server notice:', err.message);
-      });
-
-      localSyncServer.listen(48999, '127.0.0.1');
-    } catch (_) {}
-  }
-
   app.whenReady().then(() => {
     if (process.platform === 'win32') {
       app.setAppUserModelId('com.pixelmind.pmsstaff');
@@ -300,7 +299,7 @@ if (!gotTheLock) {
       }
     } catch (_) {}
 
-    startLocalSyncServer();    try {
+    try {
       const { uIOhook } = require('uiohook-napi');
       keyboardActivityHook = uIOhook;
       uIOhook.on('keydown', () => {
@@ -313,6 +312,8 @@ if (!gotTheLock) {
       console.warn('Global keyboard activity tracking unavailable:', err.message);
     }
     createWindow();
+    const startupProtocolUrl = process.argv.find(value => value.startsWith('pms-widget://'));
+    if (startupProtocolUrl) setTimeout(() => handleWidgetProtocol(startupProtocolUrl), 500);
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
