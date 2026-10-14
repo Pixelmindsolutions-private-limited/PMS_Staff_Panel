@@ -1,37 +1,37 @@
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNzQ3MWM0NDQ1YWM2NWUyNjRjMGMxOCIsImVtcGxveWVlSWQiOiJQTVMwMzAxIiwicm9sZSI6IkdyYXBoaWMgRGVzaWduZXIiLCJ0eXBlIjoic3RhZmYiLCJpYXQiOjE3OTE4OTgxMDMsImV4cCI6MTc5MjUwMjkwM30.HFlOYfik7Ef4i43zbIGnwEnGPLgf8SVC14jPd_9-i48",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNzMxMzFjMGYyOTE2NTA3ZjgzMmVmYSIsImVtcGxveWVlSWQiOiJQTVMwODAzIiwicm9sZSI6IkZsdXR0ZXIgRGV2ZWxvcGVyIiwidHlwZSI6InN0YWZmIiwiaWF0IjoxNzkxOTY4NjIwLCJleHAiOjE3OTI1NzM0MjB9.lScVSxRYZJKfF8V3PbmymUG_p68iRsGdSaQGP0RRnpM",
   "user": {
     "address": {
-      "street": "Road No.4, MIG-302, Remedy Hospital Ln, opp. Subbaiah Gari Hotel",
+      "street": "Door no. 2-41, gowthami nagar colony, near police station, chandhanagar",
       "city": "Hyderabad",
       "state": "Telangana",
-      "pincode": "500072",
+      "pincode": "500050",
       "country": "India"
     },
     "emergencyContact": {
-      "name": "Saquiba Wasi",
-      "relation": "Sister",
-      "mobile": "8521630432"
+      "name": "Santhiswaroop",
+      "relation": "Brother",
+      "mobile": "9347617060"
     },
-    "_id": "6a7471c4445ac65e264c0c18",
-    "employeeId": "PMS0301",
-    "employeeName": "Kareem Unnisa",
-    "role": "Graphic Designer",
-    "mobile": "9182636673",
-    "email": "pixelmindskareemunnisa@gmail.com",
-    "joiningDate": "2026-03-01T00:00:00.000Z",
-    "bloodGroup": "B+",
+    "_id": "6a73131c0f2916507f832efa",
+    "employeeId": "PMS0803",
+    "employeeName": "Prasanth kumar tera",
+    "role": "Flutter Developer",
+    "mobile": "9505909402",
+    "email": "prasanth.pixelmindsolutions@gmail.com",
+    "joiningDate": "2026-08-03T00:00:00.000Z",
+    "bloodGroup": "A+",
     "adminEmail": null,
     "adminPanelPassword": null,
     "isAdminPanelAccess": false,
     "isActive": true,
-    "profileImage": "https://pmsbackend.pixelmindsolutions.com/uploads/staff/profile/PMS0301_profile_1786016196794.jpg",
-    "idCardImage": "https://pmsbackend.pixelmindsolutions.com/uploads/staff/idcards/PMS0301_idcard_1786016196794.jpg",
-    "lastActive": "2026-10-13T13:28:23.893Z",
-    "createdAt": "2026-08-06T11:36:36.800Z",
-    "updatedAt": "2026-10-13T13:28:23.893Z",
+    "profileImage": "https://pmsbackend.pixelmindsolutions.com/uploads/staff/profile/PMS0803_profile_1785926428414.jpeg",
+    "idCardImage": "https://pmsbackend.pixelmindsolutions.com/uploads/staff/idcards/PMS0803_idcard_1785926428414.jpeg",
+    "lastActive": "2026-10-14T09:03:40.400Z",
+    "createdAt": "2026-08-05T10:40:28.416Z",
+    "updatedAt": "2026-10-14T09:03:40.400Z",
     "__v": 0,
-    "gender": "Female"
+    "gender": "Male"
   },
   "type": "staff"
 }

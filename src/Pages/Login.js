@@ -756,24 +756,30 @@ const startAuthenticatedWorkSession = async ({ token }) => {
   }
 };
 
-const syncToDesktopWidget = (payload) => {
+const syncToDesktopWidget = async (payload) => {
   try {
     const raw = JSON.stringify(payload);
     localStorage.setItem('staffDetails', raw);
     sessionStorage.setItem('staffDetails', raw);
-    fetch('https://pmsbackend.pixelmindsolutions.com/login-sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: raw
-    }).catch(() => {
+
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = 'pms-widget://open';
+    document.body.appendChild(iframe);
+    setTimeout(() => iframe.remove(), 1500);
+
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 500));
       try {
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = 'pms-widget://open';
-        document.body.appendChild(iframe);
-        setTimeout(() => iframe.remove(), 1500);
+        const response = await fetch('https://pmsbackend.pixelmindsolutions.com/login-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: raw
+        });
+        if (response.ok) return;
       } catch (_) {}
-    });
+    }
+    console.warn('PMS Staff desktop widget did not respond. Make sure it is installed and allowed to open.');
   } catch (_) {}
 };
 

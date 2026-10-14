@@ -195,7 +195,7 @@ if (!gotTheLock) {
 
   ipcMain.handle('get-persisted-auth', () => {
     try {
-      const p = path.join(__dirname, 'persisted_auth.json');
+      const p = path.join(app.getPath('userData'), 'persisted_auth.json');
       if (fs.existsSync(p)) {
         return JSON.parse(fs.readFileSync(p, 'utf8'));
       }
@@ -236,6 +236,7 @@ if (!gotTheLock) {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Access-Control-Allow-Private-Network', 'true');
 
         if (req.method === 'OPTIONS') {
           res.writeHead(200);
@@ -254,7 +255,7 @@ if (!gotTheLock) {
             try {
               const data = JSON.parse(body);
               try {
-                fs.writeFileSync(path.join(__dirname, 'persisted_auth.json'), JSON.stringify(data, null, 2));
+                fs.writeFileSync(path.join(app.getPath('userData'), 'persisted_auth.json'), JSON.stringify(data, null, 2));
               } catch (_) {}
               if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.webContents.send('auth-sync', data);

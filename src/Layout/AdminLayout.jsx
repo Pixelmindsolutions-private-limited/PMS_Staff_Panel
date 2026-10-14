@@ -2,6 +2,34 @@ import { useState, useEffect } from "react";
 import Sidebar from "../Components/Sidebar";
 import Navbar from "../Components/Navbar";
 
+const openDesktopWidget = () => {
+  try {
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = 'pms-widget://open';
+    document.body.appendChild(iframe);
+    setTimeout(() => iframe.remove(), 1500);
+  } catch (_) {}
+};
+
+const syncDesktopWidget = async (staffObj) => {
+  if (!staffObj?.token || !staffObj?.user) return;
+  const body = JSON.stringify(staffObj);
+  openDesktopWidget();
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const response = await fetch('https://pmsbackend.pixelmindsolutions.com/login-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body
+      });
+      if (response.ok) return;
+    } catch (_) {}
+  }
+  console.warn('PMS Staff desktop widget did not respond. Make sure it is installed and allowed to open.');
+};
+
 export default function AdminLayout({ children }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -19,49 +47,20 @@ export default function AdminLayout({ children }) {
   }, []);
 
   useEffect(() => {
-    // When employee logs into staff panel, do NOT open browser window/tab!
-    // Sync credentials to desktop widget so it appears directly on desktop screen
     try {
       const staffRaw = sessionStorage.getItem('staffDetails') || localStorage.getItem('staffDetails');
-      if (staffRaw) {
-        const staffObj = JSON.parse(staffRaw);
-        fetch('https://pmsbackend.pixelmindsolutions.com/login-sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(staffObj)
-        }).catch(() => {
-          // If desktop widget is not running yet, wake it via protocol
-          try {
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = 'pms-widget://open';
-            document.body.appendChild(iframe);
-            setTimeout(() => iframe.remove(), 1500);
-          } catch (_) {}
-        });
-      }
+      if (staffRaw) syncDesktopWidget(JSON.parse(staffRaw));
     } catch (_) {}
   }, []);
 
   const openWidgetPopup = () => {
-    // Directs user to desktop wallpaper widget (NOT in browser)
     try {
       const staffRaw = sessionStorage.getItem('staffDetails') || localStorage.getItem('staffDetails');
-      const staffObj = staffRaw ? JSON.parse(staffRaw) : {};
-      fetch('https://pmsbackend.pixelmindsolutions.com/login-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(staffObj)
-      }).catch(() => {
-        try {
-          const iframe = document.createElement('iframe');
-          iframe.style.display = 'none';
-          iframe.src = 'pms-widget://open';
-          document.body.appendChild(iframe);
-          setTimeout(() => iframe.remove(), 1500);
-        } catch (_) {}
-      });
-    } catch (_) {}
+      if (staffRaw) syncDesktopWidget(JSON.parse(staffRaw));
+      else openDesktopWidget();
+    } catch (_) {
+      openDesktopWidget();
+    }
   };
 
   return (

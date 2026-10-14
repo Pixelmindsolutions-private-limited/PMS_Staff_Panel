@@ -39,7 +39,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "desktop:dist": "npm run build && electron-builder --win nsis"
   },
   "eslintConfig": {
     "extends": [
@@ -61,6 +62,31 @@
   },
   "devDependencies": {
     "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
     "tailwindcss": "^3.4.17"
+  },
+  "build": {
+    "appId": "com.pixelmind.pmsstaff",
+    "productName": "PMS Staff Widget",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron.js",
+      "preload.js",
+      "build/**/*",
+      "pms_logo.ico",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "pms_logo.ico",
+      "artifactName": "PMS-Staff-Widget-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

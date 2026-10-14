@@ -4,6 +4,7 @@ import { FiLock, FiUser, FiLogIn, FiAlertCircle } from 'react-icons/fi';
 
 const PunchWidgetPopup = () => {
   const [isAuth, setIsAuth] = useState(false);
+  const [authRevision, setAuthRevision] = useState(0);
   const [empIdInput, setEmpIdInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -55,6 +56,7 @@ const PunchWidgetPopup = () => {
           if (payload.user.employeeId) {
             sessionStorage.setItem('employeeId', payload.user.employeeId);
           }
+          setAuthRevision((revision) => revision + 1);
           setIsAuth(true);
         }
       });
@@ -115,7 +117,7 @@ const PunchWidgetPopup = () => {
     <div className="w-screen h-screen flex items-center justify-center p-2 bg-transparent select-none overflow-hidden">
       <div className="w-full max-w-[660px]">
         {isAuth ? (
-          <AttendanceWidget isStandalonePopup={true} />
+          <AttendanceWidget key={authRevision} isStandalonePopup={true} />
         ) : (
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl p-6 w-full text-center" style={{ backgroundColor: '#ffffff' }}>
             <img src="/pms_logo.png" alt="Pixel Mind Solutions" className="w-16 h-16 object-contain mx-auto mb-3" />
