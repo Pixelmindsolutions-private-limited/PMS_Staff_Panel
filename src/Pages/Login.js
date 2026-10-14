@@ -736,6 +736,26 @@ import { useNavigate } from 'react-router-dom';
 
 const API_BASE = 'https://pmsbackend.pixelmindsolutions.com/api';
 
+const startAuthenticatedWorkSession = async ({ token }) => {
+  try {
+    const response = await fetch(`${API_BASE}/work-session/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ notes: 'Started from staff panel login' })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Unable to start work session');
+    }
+  } catch (error) {
+    // Keep successful authentication intact if the attendance service is temporarily unavailable.
+    console.error('Work session auto-start failed:', error);
+  }
+};
+
 const syncToDesktopWidget = (payload) => {
   try {
     const raw = JSON.stringify(payload);
@@ -989,6 +1009,7 @@ const LoginPage = () => {
           type: 'staff'
         };
         sessionStorage.setItem('staffDetails', JSON.stringify(authPayload));
+        await startAuthenticatedWorkSession(authPayload);
         syncToDesktopWidget(authPayload);
         
         // Also store individual items for easy access
@@ -1050,6 +1071,7 @@ const LoginPage = () => {
           type: 'staff'
         };
         sessionStorage.setItem('staffDetails', JSON.stringify(authPayload));
+        await startAuthenticatedWorkSession(authPayload);
         syncToDesktopWidget(authPayload);
         
         // Also store individual items for easy access
