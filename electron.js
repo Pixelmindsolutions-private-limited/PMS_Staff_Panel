@@ -32,7 +32,7 @@ function startFallbackServer() {
     fallbackServer = http.createServer((req, res) => {
       let reqPath;
       try {
-        reqPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+        reqPath = decodeURIComponent(new URL(req.url, 'http://31.97.228.17:4477').pathname);
       } catch (_) {
         res.writeHead(400);
         return res.end('Bad request');
@@ -143,16 +143,16 @@ async function createWindow() {
   if (fs.existsSync(buildIndex)) {
     try {
       const port = await startFallbackServer();
-      await mainWindow.loadURL(`http://localhost:${port}/punch-widget`);
+      await mainWindow.loadURL(`http://31.97.228.17:4477/punch-widget`);
     } catch (e) {
       console.error('Fallback server error:', e);
-      mainWindow.loadURL('http://localhost:3000/punch-widget').catch(() => {});
+      mainWindow.loadURL('http://31.97.228.17:4477/punch-widget').catch(() => {});
     }
   } else {
-    mainWindow.loadURL('http://localhost:3000/punch-widget').catch(async () => {
+    mainWindow.loadURL('http://31.97.228.17:4477/punch-widget').catch(async () => {
       try {
         const port = await startFallbackServer();
-        mainWindow.loadURL(`http://localhost:${port}/punch-widget`);
+        mainWindow.loadURL(`http://31.97.228.17:4477/punch-widget`);
       } catch (e) {
         console.error('Fallback server error:', e);
       }
