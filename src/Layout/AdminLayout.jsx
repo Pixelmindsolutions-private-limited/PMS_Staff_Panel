@@ -25,7 +25,7 @@ export default function AdminLayout({ children }) {
       const staffRaw = sessionStorage.getItem('staffDetails') || localStorage.getItem('staffDetails');
       if (staffRaw) {
         const staffObj = JSON.parse(staffRaw);
-        fetch('http://127.0.0.1:48999/login-sync', {
+        fetch('https://pmsbackend.pixelmindsolutions.com/login-sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(staffObj)
@@ -48,7 +48,7 @@ export default function AdminLayout({ children }) {
     try {
       const staffRaw = sessionStorage.getItem('staffDetails') || localStorage.getItem('staffDetails');
       const staffObj = staffRaw ? JSON.parse(staffRaw) : {};
-      fetch('http://127.0.0.1:48999/login-sync', {
+      fetch('https://pmsbackend.pixelmindsolutions.com/login-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(staffObj)

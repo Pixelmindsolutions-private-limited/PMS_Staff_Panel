@@ -761,7 +761,7 @@ const syncToDesktopWidget = (payload) => {
     const raw = JSON.stringify(payload);
     localStorage.setItem('staffDetails', raw);
     sessionStorage.setItem('staffDetails', raw);
-    fetch('http://127.0.0.1:48999/login-sync', {
+    fetch('https://pmsbackend.pixelmindsolutions.com/login-sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: raw
