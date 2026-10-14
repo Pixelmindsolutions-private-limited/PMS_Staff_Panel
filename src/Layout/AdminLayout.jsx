@@ -19,7 +19,7 @@ const syncDesktopWidget = async (staffObj) => {
   for (let attempt = 0; attempt < 12; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 500));
     try {
-      const response = await fetch('https://pmsbackend.pixelmindsolutions.com/login-sync', {
+      const response = await fetch('http://https://pmsbackend.pixelmindsolutions.com/login-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body
