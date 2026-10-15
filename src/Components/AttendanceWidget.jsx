@@ -131,6 +131,8 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   const syncChannelRef = useRef(null);
   const punchStartTimeRef = useRef(null);
   const lastActivityReportTimeRef = useRef(0);
+  const isCurrentlyIdleRef = useRef(false);
+  const activityReportInProgressRef = useRef(false);
 
   // Format helpers
   const formatSecToHMS = (totalSec) => {
@@ -270,8 +272,11 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
             setWorkingSeconds(restoredWorkSec);
             setIsCurrentlyIdle(status === 'idle');
+            isCurrentlyIdleRef.current = status === 'idle';
             if (status === 'idle') {
               setShowIdleModal(true);
+            } else {
+              setShowIdleModal(false);
             }
             lastActivityTimeRef.current = Date.now();
           }
@@ -316,46 +321,73 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     };
   }, [refreshStatus]);
 
-  // Mouse & keyboard activity detection
+  // Detect human activity and resume an idle session only after the server confirms it.
   useEffect(() => {
-    const onUserActivity = async (e) => {
+    let mounted = true;
+
+    const onUserActivity = async () => {
       const now = Date.now();
       lastActivityTimeRef.current = now;
 
-      // When user is currently idle or modal is shown, report human activity to backend
-      if (isCurrentlyIdle || showIdleModal) {
-        if (now - lastActivityReportTimeRef.current >= 1500 && employeeId && authToken) {
-          lastActivityReportTimeRef.current = now;
-          try {
-            const res = await apiCall('/work-session/report-idle', 'POST', {
-              employeeId,
-              activityType: 'human'
-            });
-            if (res?.success) {
-              setIsCurrentlyIdle(false);
-              setShowIdleModal(false);
-              if (res.data?.totalWorkSeconds !== undefined) {
-                setWorkingSeconds(res.data.totalWorkSeconds);
-              } else if (res.data?.totalWorkDuration !== undefined) {
-                setWorkingSeconds(Math.round(res.data.totalWorkDuration * 60));
-              }
-              broadcastSync('STATE_UPDATED', { status: 'working' });
-            }
-          } catch (err) {
-            console.warn('Activity report error:', err.message);
-          }
+      // Do not resume sessions that are not actively punched in.
+      if (punchStatus !== 'in') return;
+
+      const idleSession = isCurrentlyIdleRef.current || showIdleModal;
+      if (!idleSession || !employeeId || !authToken) return;
+      if (activityReportInProgressRef.current) return;
+      if (now - lastActivityReportTimeRef.current < 1500) return;
+
+      lastActivityReportTimeRef.current = now;
+      activityReportInProgressRef.current = true;
+
+      try {
+        const res = await apiCall('/work-session/report-idle', 'POST', {
+          employeeId,
+          activityType: 'human'
+        });
+
+        if (!mounted || !res?.success) return;
+
+        // Only clear idle after the backend has accepted the activity.
+        isCurrentlyIdleRef.current = false;
+        setIsCurrentlyIdle(false);
+        setShowIdleModal(false);
+
+        if (res.data?.totalWorkSeconds !== undefined) {
+          setWorkingSeconds(Number(res.data.totalWorkSeconds));
+        } else if (res.data?.totalWorkDuration !== undefined) {
+          setWorkingSeconds(Math.round(Number(res.data.totalWorkDuration) * 60));
         }
+
+        broadcastSync('STATE_UPDATED', { status: 'working' });
+      } catch (err) {
+        console.warn('Activity report error:', err.message);
+      } finally {
+        activityReportInProgressRef.current = false;
       }
     };
 
-    const events = ['mousemove', 'mousedown', 'keydown', 'keyup', 'input', 'wheel', 'touchstart'];
-    events.forEach(e => window.addEventListener(e, onUserActivity, { passive: true }));
-    const removeGlobalKeyboardListener = window.electronAPI?.onGlobalKeyboardActivity?.(onUserActivity);
+    const events = [
+      'mousemove', 'mousedown', 'keydown', 'keyup',
+      'input', 'wheel', 'touchstart', 'pointerdown'
+    ];
+    events.forEach(eventName =>
+      window.addEventListener(eventName, onUserActivity, { passive: true })
+    );
+
+    const removeGlobalKeyboardListener =
+      window.electronAPI?.onGlobalKeyboardActivity?.(onUserActivity);
+
     return () => {
-      events.forEach(e => window.removeEventListener(e, onUserActivity, { passive: true }));
-      if (typeof removeGlobalKeyboardListener === 'function') removeGlobalKeyboardListener();
+      mounted = false;
+      events.forEach(eventName =>
+        window.removeEventListener(eventName, onUserActivity)
+      );
+      if (typeof removeGlobalKeyboardListener === 'function') {
+        removeGlobalKeyboardListener();
+      }
     };
-  }, [isCurrentlyIdle, showIdleModal, employeeId, authToken, apiCall]);
+  }, [punchStatus, showIdleModal, employeeId, authToken, apiCall]);
 
   // 1-second master clock & scheduler
   useEffect(() => {
@@ -419,11 +451,16 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       // If working normally (not on scheduled break card):
       if (punchStatus === 'in' && activeSeparateCard === null) {
         const idleForSec = (Date.now() - lastActivityTimeRef.current) / 1000;
+
         if (idleForSec > 60) {
-          setIsCurrentlyIdle(true);
+          // Enter idle once. Do not let this timer auto-resume the session.
+          if (!isCurrentlyIdleRef.current) {
+            isCurrentlyIdleRef.current = true;
+            setIsCurrentlyIdle(true);
+            setShowIdleModal(true);
+          }
           setDelaySeconds(prev => prev + 1);
-        } else {
-          setIsCurrentlyIdle(false);
+        } else if (!isCurrentlyIdleRef.current) {
           setWorkingSeconds(prev => prev + 1);
         }
       }
@@ -479,27 +516,52 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
   // ================= ACTION HANDLERS =================
   const handleResumeFromIdle = async () => {
-    setShowIdleModal(false);
-    setIsCurrentlyIdle(false);
-    lastActivityTimeRef.current = Date.now();
+    if (isLoading) return;
+
+    setIsLoading(true);
+    setError('');
+
     try {
-      const res = await apiCall('/work-session/handle-idle', 'POST', {
-        employeeId,
-        action: 'continue'
-      });
-      if (res?.data) {
-        if (res.data.totalWorkSeconds !== undefined) {
-          setWorkingSeconds(res.data.totalWorkSeconds);
-        } else if (res.data.totalWorkDuration !== undefined) {
-          setWorkingSeconds(Math.round(res.data.totalWorkDuration * 60));
-        }
-      }
-      setPunchStatus('in');
-      broadcastSync('STATE_UPDATED', { status: 'working' });
-    } catch (_) {
+      let res;
+
       try {
-        await apiCall('/work-session/report-idle', 'POST', { employeeId, activityType: 'human' });
-      } catch (_) {}
+        res = await apiCall('/work-session/handle-idle', 'POST', {
+          employeeId,
+          action: 'continue'
+        });
+      } catch (primaryError) {
+        // Compatibility fallback for backends that resume through report-idle.
+        res = await apiCall('/work-session/report-idle', 'POST', {
+          employeeId,
+          activityType: 'human'
+        });
+      }
+
+      if (!res?.success) {
+        throw new Error('The server did not confirm that the session resumed.');
+      }
+
+      lastActivityTimeRef.current = Date.now();
+      isCurrentlyIdleRef.current = false;
+      setIsCurrentlyIdle(false);
+      setShowIdleModal(false);
+      setPunchStatus('in');
+
+      if (res.data?.totalWorkSeconds !== undefined) {
+        setWorkingSeconds(Number(res.data.totalWorkSeconds));
+      } else if (res.data?.totalWorkDuration !== undefined) {
+        setWorkingSeconds(Math.round(Number(res.data.totalWorkDuration) * 60));
+      }
+
+      broadcastSync('STATE_UPDATED', { status: 'working' });
+    } catch (err) {
+      // Keep the idle state visible when the server has not resumed the session.
+      setIsCurrentlyIdle(true);
+      isCurrentlyIdleRef.current = true;
+      setShowIdleModal(true);
+      setError(err.message || 'Unable to resume work. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -512,6 +574,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         notes: `Started from ${location}`
       });
       setPunchStatus('in');
+      isCurrentlyIdleRef.current = false;
+      setIsCurrentlyIdle(false);
+      setShowIdleModal(false);
       punchStartTimeRef.current = Date.now();
       lastActivityTimeRef.current = Date.now();
       broadcastSync('STATE_UPDATED', { status: 'working' });
@@ -573,6 +638,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     setShowLunchFinished(false);
     setShowTeaFinished(false);
     setPunchStatus('in');
+    isCurrentlyIdleRef.current = false;
+    setIsCurrentlyIdle(false);
+    setShowIdleModal(false);
     lastActivityTimeRef.current = Date.now();
     broadcastSync('STATE_UPDATED', { status: 'working' });
     setIsLoading(false);
@@ -630,6 +698,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       await apiCall('/work-session/end-break', 'POST', { employeeId });
       setPunchStatus('in');
       setBreakInfo(null);
+      isCurrentlyIdleRef.current = false;
+      setIsCurrentlyIdle(false);
+      setShowIdleModal(false);
       lastActivityTimeRef.current = Date.now();
 
       const todayStr = new Date().toISOString().split('T')[0];
@@ -1391,3 +1462,4 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 };
 
 export default AttendanceWidget;
+

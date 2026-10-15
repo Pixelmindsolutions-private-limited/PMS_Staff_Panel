@@ -320,6 +320,7 @@ if (!gotTheLock) {
       uIOhook.on('mouseup', sendActivity);
       uIOhook.on('wheel', sendMouseActivity);
       uIOhook.start();
+      
     } catch (err) {
       console.warn('Global keyboard activity tracking unavailable:', err.message);
     }
