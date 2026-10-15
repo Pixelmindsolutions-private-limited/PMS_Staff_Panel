@@ -302,11 +302,23 @@ if (!gotTheLock) {
     try {
       const { uIOhook } = require('uiohook-napi');
       keyboardActivityHook = uIOhook;
-      uIOhook.on('keydown', () => {
+      const sendActivity = () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('global-keyboard-activity');
         }
-      });
+      };
+      let lastMouseSend = 0;
+      const sendMouseActivity = () => {
+        const now = Date.now();
+        if (now - lastMouseSend < 400) return;
+        lastMouseSend = now;
+        sendActivity();
+      };
+      uIOhook.on('keydown', sendActivity);
+      uIOhook.on('mousemove', sendMouseActivity);
+      uIOhook.on('mousedown', sendActivity);
+      uIOhook.on('mouseup', sendActivity);
+      uIOhook.on('wheel', sendMouseActivity);
       uIOhook.start();
     } catch (err) {
       console.warn('Global keyboard activity tracking unavailable:', err.message);

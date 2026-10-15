@@ -531,8 +531,10 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       await apiCall('/work-session/break', 'POST', {
         employeeId,
         type,
+        breakType: type,
         duration: durationMin,
-        reason: `${type} break`
+        durationMinutes: durationMin,
+        reason: type
       });
       setScheduledBreakRunning(true);
       setScheduledBreakRemaining(durationMin * 60);
@@ -582,14 +584,14 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     setIsLoading(true);
     setError('');
     try {
-      const normalizedType = breakReason.toLowerCase().includes('meeting') ? 'meeting' : 'personal';
+      const normalizedType = breakReason.toLowerCase().includes('meeting') ? 'other' : 'personal';
       const res = await apiCall('/work-session/break', 'POST', {
         employeeId,
         type: normalizedType,
         breakType: normalizedType,
         duration: breakDuration,
         durationMinutes: breakDuration,
-        reason: breakReason
+        reason: normalizedType
       });
       setPunchStatus('break');
       setBreakRemainingSec(breakDuration * 60);

@@ -1182,7 +1182,8 @@ const StaffPunchInOut = () => {
     try {
       const data = await apiCall('/work-session/start-break', 'POST', {
         employeeId,
-        breakType: breakType === 'tea_break' ? 'tea' : 'lunch'
+        breakType: breakType === 'tea_break' ? 'tea' : 'lunch',
+        durationMinutes: breakType === 'tea_break' ? 15 : 45
       });
       
       setPunchStatus('break');
@@ -1245,11 +1246,13 @@ const StaffPunchInOut = () => {
     events.forEach(e =>
       window.addEventListener(e, handleActivity, { passive: true })
     );
+    const removeGlobalKeyboardListener = window.electronAPI?.onGlobalKeyboardActivity?.(handleActivity);
 
     return () => {
       events.forEach(e =>
         window.removeEventListener(e, handleActivity, { passive: true })
       );
+      if (typeof removeGlobalKeyboardListener === 'function') removeGlobalKeyboardListener();
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       if (activityTimerRef.current) clearInterval(activityTimerRef.current);
       if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
