@@ -13,5 +13,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('global-keyboard-activity', listener);
     return () => ipcRenderer.removeListener('global-keyboard-activity', listener);
   },
+  onGlobalMouseActivity: (callback) => {
+  const listener = () => callback();
+  ipcRenderer.on('global-mouse-activity', listener);
+
+  return () => {
+    ipcRenderer.removeListener('global-mouse-activity', listener);
+  };
+},
   getPersistedAuth: () => ipcRenderer.invoke('get-persisted-auth')
 });

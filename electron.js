@@ -1,7 +1,7 @@
-const { app, BrowserWindow, screen, ipcMain } = require('electron');
-const path = require('path');
-const http = require('http');
-const fs = require('fs');
+const { app, BrowserWindow, screen, ipcMain } = require("electron");
+const path = require("path");
+const http = require("http");
+const fs = require("fs");
 
 let mainWindow = null;
 let fallbackServer = null;
@@ -19,14 +19,14 @@ function storeAndBroadcastAuth(payload) {
   if (!payload?.token || !payload?.user) return;
   try {
     fs.writeFileSync(
-      path.join(app.getPath('userData'), 'persisted_auth.json'),
-      JSON.stringify(payload, null, 2)
+      path.join(app.getPath("userData"), "persisted_auth.json"),
+      JSON.stringify(payload, null, 2),
     );
   } catch (error) {
-    console.warn('Could not persist synced staff login:', error.message);
+    console.warn("Could not persist synced staff login:", error.message);
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('auth-sync', payload);
+    mainWindow.webContents.send("auth-sync", payload);
     focusWidgetWindow();
   }
 }
@@ -34,27 +34,39 @@ function storeAndBroadcastAuth(payload) {
 function handleWidgetProtocol(rawUrl) {
   try {
     const url = new URL(rawUrl);
-    if (url.protocol !== 'pms-widget:') return;
-    if (url.hostname === 'sync') {
-      const syncId = url.pathname.replace(/^\/+/, '');
+    if (url.protocol !== "pms-widget:") return;
+    if (url.hostname === "sync") {
+      const syncId = url.pathname.replace(/^\/+/, "");
       if (!/^[a-f0-9]{48}$/.test(syncId)) return;
-      const request = http.get(`https://pmsbackend.pixelmindsolutions.com/login-sync/pending/${syncId}`, (response) => {
-        let body = '';
-        response.setEncoding('utf8');
-        response.on('data', chunk => { body += chunk; });
-        response.on('end', () => {
-          try {
-            const result = JSON.parse(body);
-            if (response.statusCode === 200 && result.success) {
-              storeAndBroadcastAuth(result.data);
+      const request = http.get(
+        `https://pmsbackend.pixelmindsolutions.com/login-sync/pending/${syncId}`,
+        (response) => {
+          let body = "";
+          response.setEncoding("utf8");
+          response.on("data", (chunk) => {
+            body += chunk;
+          });
+          response.on("end", () => {
+            try {
+              const result = JSON.parse(body);
+              if (response.statusCode === 200 && result.success) {
+                storeAndBroadcastAuth(result.data);
+              }
+            } catch (error) {
+              console.warn(
+                "Could not read staff login sync response:",
+                error.message,
+              );
             }
-          } catch (error) {
-            console.warn('Could not read staff login sync response:', error.message);
-          }
-        });
-      });
-      request.setTimeout(5000, () => request.destroy(new Error('Login sync request timed out')));
-      request.on('error', error => console.warn('Desktop staff sync failed:', error.message));
+          });
+        },
+      );
+      request.setTimeout(5000, () =>
+        request.destroy(new Error("Login sync request timed out")),
+      );
+      request.on("error", (error) =>
+        console.warn("Desktop staff sync failed:", error.message),
+      );
       return;
     }
     focusWidgetWindow();
@@ -62,14 +74,14 @@ function handleWidgetProtocol(rawUrl) {
 }
 
 const MIME_TYPES = {
-  '.html': 'text/html',
-  '.js': 'text/javascript',
-  '.css': 'text/css',
-  '.json': 'application/json',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon'
+  ".html": "text/html",
+  ".js": "text/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
 };
 
 function startFallbackServer() {
@@ -81,54 +93,60 @@ function startFallbackServer() {
   }
 
   return new Promise((resolve) => {
-    const buildDir = path.join(__dirname, 'build');
+    const buildDir = path.join(__dirname, "build");
     fallbackServer = http.createServer((req, res) => {
       let reqPath;
       try {
-        reqPath = decodeURIComponent(new URL(req.url, 'http://31.97.228.17:4477').pathname);
+        reqPath = decodeURIComponent(
+          new URL(req.url, "http://31.97.228.17:4477/").pathname,
+        );
       } catch (_) {
         res.writeHead(400);
-        return res.end('Bad request');
+        return res.end("Bad request");
       }
 
       // Resolve URL paths from the build directory (strip leading slashes first;
       // path.join can otherwise resolve differently across platforms).
-      const relativePath = reqPath.replace(/^\/+/, '');
+      const relativePath = reqPath.replace(/^\/+/, "");
       let filePath = path.resolve(buildDir, relativePath);
       const buildRoot = path.resolve(buildDir) + path.sep;
 
-      if (!filePath.startsWith(buildRoot) || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-        filePath = path.join(buildDir, 'index.html');
+      if (
+        !filePath.startsWith(buildRoot) ||
+        !fs.existsSync(filePath) ||
+        fs.statSync(filePath).isDirectory()
+      ) {
+        filePath = path.join(buildDir, "index.html");
       }
 
       const ext = path.extname(filePath);
-      const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+      const contentType = MIME_TYPES[ext] || "application/octet-stream";
 
       fs.readFile(filePath, (err, content) => {
         if (err) {
           res.writeHead(500);
-          res.end('Error loading file');
+          res.end("Error loading file");
         } else {
-          res.writeHead(200, { 'Content-Type': contentType });
+          res.writeHead(200, { "Content-Type": contentType });
           res.end(content);
         }
       });
     });
 
-    fallbackServer.on('error', (err) => {
-      console.warn('Fallback server error:', err.message);
+    fallbackServer.on("error", (err) => {
+      console.warn("Fallback server error:", err.message);
       // Try ephemeral random port
       try {
         const srv = http.createServer((req, res) => {
-          let reqPath = req.url.split('?')[0];
+          let reqPath = req.url.split("?")[0];
           let filePath = path.join(buildDir, reqPath);
           if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-            filePath = path.join(buildDir, 'index.html');
+            filePath = path.join(buildDir, "index.html");
           }
           const ext = path.extname(filePath);
-          const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+          const contentType = MIME_TYPES[ext] || "application/octet-stream";
           fs.readFile(filePath, (_, content) => {
-            res.writeHead(200, { 'Content-Type': contentType });
+            res.writeHead(200, { "Content-Type": contentType });
             res.end(content);
           });
         });
@@ -170,17 +188,17 @@ async function createWindow() {
     transparent: true, // Wallpaper visible around the card
     hasShadow: true,
     show: true,
-    title: 'PMS Staff - Attendance & Work Tracker',
-    icon: path.join(__dirname, 'pms_logo.ico'),
+    title: "PMS Staff - Attendance & Work Tracker",
+    icon: path.join(__dirname, "pms_logo.ico"),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
-      enableRemoteModule: false
-    }
+      enableRemoteModule: false,
+    },
   });
 
-  mainWindow.once('ready-to-show', () => {
+  mainWindow.once("ready-to-show", () => {
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
@@ -188,34 +206,39 @@ async function createWindow() {
   });
 
   // Block any attempt to close the window (Alt+F4, Taskbar thumbnail close, etc.)
-  mainWindow.on('close', (event) => {
+  mainWindow.on("close", (event) => {
     event.preventDefault();
   });
 
-  const buildIndex = path.join(__dirname, 'build', 'index.html');
+  const buildIndex = path.join(__dirname, "build", "index.html");
   if (fs.existsSync(buildIndex)) {
     try {
       const port = await startFallbackServer();
       await mainWindow.loadURL(`http://31.97.228.17:4477/punch-widget`);
     } catch (e) {
-      console.error('Fallback server error:', e);
-      mainWindow.loadURL('http://31.97.228.17:4477/punch-widget').catch(() => {});
+      console.error("Fallback server error:", e);
+      mainWindow
+        .loadURL("http://31.97.228.17:4477/punch-widget")
+        .catch(() => {});
     }
   } else {
-    mainWindow.loadURL('http://31.97.228.17:4477/punch-widget').catch(async () => {
-      try {
-        const port = await startFallbackServer();
-        mainWindow.loadURL(`http://31.97.228.17:4477/punch-widget`);
-      } catch (e) {
-        console.error('Fallback server error:', e);
-      }
-    });
+    mainWindow
+      .loadURL("http://31.97.228.17:4477/punch-widget")
+      .catch(async () => {
+        try {
+          const port = await startFallbackServer();
+          mainWindow.loadURL(`http://31.97.228.17:4477/punch-widget`);
+        } catch (e) {
+          console.error("Fallback server error:", e);
+        }
+      });
   }
 
-  mainWindow.on('closed', () => {
+  mainWindow.on("closed", () => {
     mainWindow = null;
   });
 }
+
 
 // Single instance lock: prevent duplicate instances conflicting
 const gotTheLock = app.requestSingleInstanceLock();
@@ -223,22 +246,24 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', (_event, commandLine) => {
-    const protocolUrl = commandLine.find(value => value.startsWith('pms-widget://'));
+  app.on("second-instance", (_event, commandLine) => {
+    const protocolUrl = commandLine.find((value) =>
+      value.startsWith("pms-widget://"),
+    );
     if (protocolUrl) handleWidgetProtocol(protocolUrl);
     else focusWidgetWindow();
   });
-  app.on('open-url', (event, url) => {
+  app.on("open-url", (event, url) => {
     event.preventDefault();
     handleWidgetProtocol(url);
   });
 
   // IPC Handlers for window controls
-  ipcMain.on('window-minimize', () => {
+  ipcMain.on("window-minimize", () => {
     if (mainWindow) mainWindow.minimize();
   });
 
-  ipcMain.on('window-maximize', () => {
+  ipcMain.on("window-maximize", () => {
     if (mainWindow) {
       if (mainWindow.isMaximized()) {
         mainWindow.unmaximize();
@@ -248,23 +273,23 @@ if (!gotTheLock) {
     }
   });
 
-  ipcMain.handle('get-persisted-auth', () => {
+  ipcMain.handle("get-persisted-auth", () => {
     try {
-      const p = path.join(app.getPath('userData'), 'persisted_auth.json');
+      const p = path.join(app.getPath("userData"), "persisted_auth.json");
       if (fs.existsSync(p)) {
-        return JSON.parse(fs.readFileSync(p, 'utf8'));
+        return JSON.parse(fs.readFileSync(p, "utf8"));
       }
     } catch (_) {}
     return null;
   });
 
-  ipcMain.on('window-set-height', (event, height) => {
+  ipcMain.on("window-set-height", (event, height) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.setSize(660, height);
     }
   });
 
-  ipcMain.on('window-toggle-size', () => {
+  ipcMain.on("window-toggle-size", () => {
     if (mainWindow) {
       const primaryDisplay = screen.getPrimaryDisplay();
       const { width: screenWidth } = primaryDisplay.workAreaSize;
@@ -280,71 +305,93 @@ if (!gotTheLock) {
     }
   });
 
-  ipcMain.on('window-close', () => {
+  ipcMain.on("window-close", () => {
     // Disabled: no employee is permitted to close the widget
   });
 
   app.whenReady().then(() => {
-    if (process.platform === 'win32') {
-      app.setAppUserModelId('com.pixelmind.pmsstaff');
+    if (process.platform === "win32") {
+      app.setAppUserModelId("com.pixelmind.pmsstaff");
     }
 
     try {
       if (process.defaultApp) {
         if (process.argv.length >= 2) {
-          app.setAsDefaultProtocolClient('pms-widget', process.execPath, [path.resolve(process.argv[1])]);
+          app.setAsDefaultProtocolClient("pms-widget", process.execPath, [
+            path.resolve(process.argv[1]),
+          ]);
         }
       } else {
-        app.setAsDefaultProtocolClient('pms-widget');
+        app.setAsDefaultProtocolClient("pms-widget");
       }
     } catch (_) {}
 
     try {
-      const { uIOhook } = require('uiohook-napi');
+      const { uIOhook } = require("uiohook-napi");
       keyboardActivityHook = uIOhook;
-      const sendActivity = () => {
+
+      let lastMouseSend = 0;
+
+      const sendKeyboardActivity = () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('global-keyboard-activity');
+          mainWindow.webContents.send("global-keyboard-activity");
         }
       };
-      let lastMouseSend = 0;
+
       const sendMouseActivity = () => {
         const now = Date.now();
+
         if (now - lastMouseSend < 400) return;
         lastMouseSend = now;
-        sendActivity();
-      };
-      uIOhook.on('keydown', sendActivity);
-      uIOhook.on('mousemove', sendMouseActivity);
-      uIOhook.on('mousedown', sendActivity);
-      uIOhook.on('mouseup', sendActivity);
-      uIOhook.on('wheel', sendMouseActivity);
-      uIOhook.start();
-      
-    } catch (err) {
-      console.warn('Global keyboard activity tracking unavailable:', err.message);
-    }
-    createWindow();
-    const startupProtocolUrl = process.argv.find(value => value.startsWith('pms-widget://'));
-    if (startupProtocolUrl) setTimeout(() => handleWidgetProtocol(startupProtocolUrl), 500);
 
-    app.on('activate', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("global-mouse-activity");
+        }
+      };
+
+      uIOhook.on("keydown", sendKeyboardActivity);
+      uIOhook.on("keyup", sendKeyboardActivity);
+
+      uIOhook.on("mousemove", sendMouseActivity);
+      uIOhook.on("mousedown", sendMouseActivity);
+      uIOhook.on("mouseup", sendMouseActivity);
+      uIOhook.on("wheel", sendMouseActivity);
+
+      uIOhook.start();
+
+      console.log("Global keyboard and mouse tracking started");
+    } catch (err) {
+      console.error("Global activity tracking unavailable:", err);
+    }
+
+    createWindow();
+    const startupProtocolUrl = process.argv.find((value) =>
+      value.startsWith("pms-widget://"),
+    );
+    if (startupProtocolUrl)
+      setTimeout(() => handleWidgetProtocol(startupProtocolUrl), 500);
+
+    app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
   });
 }
 
-app.on('will-quit', () => {
+app.on("will-quit", () => {
   if (keyboardActivityHook) {
-    try { keyboardActivityHook.stop(); } catch (_) {}
+    try {
+      keyboardActivityHook.stop();
+    } catch (_) {}
   }
 });
 
-app.on('window-all-closed', () => {
+app.on("window-all-closed", () => {
   if (fallbackServer) {
-    try { fallbackServer.close(); } catch (_) {}
+    try {
+      fallbackServer.close();
+    } catch (_) {}
   }
-  if (process.platform !== 'darwin') {
+  if (process.platform !== "darwin") {
     app.quit();
   }
 });

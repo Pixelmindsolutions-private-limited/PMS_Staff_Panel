@@ -1,31 +1,39 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
-  FiClock, FiMapPin, FiCheckCircle, FiAlertCircle, FiCoffee,
-  FiExternalLink, FiX, FiPlay, FiMinus, FiChevronDown
-} from 'react-icons/fi';
+  FiClock,
+  FiMapPin,
+  FiCheckCircle,
+  FiAlertCircle,
+  FiCoffee,
+  FiExternalLink,
+  FiX,
+  FiPlay,
+  FiMinus,
+  FiChevronDown,
+} from "react-icons/fi";
 
-const API_BASE_CANDIDATES = [
-  'https://pmsbackend.pixelmindsolutions.com/api'
-];
+const API_BASE_CANDIDATES = ["https://pmsbackend.pixelmindsolutions.com/api"];
 
 export const getApiBaseUrl = () => {
-  return 'https://pmsbackend.pixelmindsolutions.com/api';
+  return "https://pmsbackend.pixelmindsolutions.com/api";
 };
 
 export const getStoredStaffDetails = () => {
   try {
-    const rawSession = sessionStorage.getItem('staffDetails');
+    const rawSession = sessionStorage.getItem("staffDetails");
     if (rawSession) {
       const parsed = JSON.parse(rawSession);
       if (parsed?.token && parsed?.user) {
-        try { localStorage.setItem('staffDetails', rawSession); } catch (_) {}
+        try {
+          localStorage.setItem("staffDetails", rawSession);
+        } catch (_) {}
         return parsed;
       }
     }
   } catch (_) {}
 
   try {
-    const rawLocal = localStorage.getItem('staffDetails');
+    const rawLocal = localStorage.getItem("staffDetails");
     if (rawLocal) {
       const parsed = JSON.parse(rawLocal);
       if (parsed?.token && parsed?.user) {
@@ -38,15 +46,15 @@ export const getStoredStaffDetails = () => {
 
 const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   const [staffDetails, setStaffDetails] = useState(null);
-  const [employeeId, setEmployeeId] = useState('');
-  const [authToken, setAuthToken] = useState('');
+  const [employeeId, setEmployeeId] = useState("");
+  const [authToken, setAuthToken] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // punchStatus: 'out' (Not Working) | 'in' (Working) | 'break' (On Break) | 'completed' (Work Ended)
-  const [punchStatus, setPunchStatus] = useState('out');
-  const [location, setLocation] = useState('Office');
+  const [punchStatus, setPunchStatus] = useState("out");
+  const [location, setLocation] = useState("Office");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   // Working & Delay (Idle) timers
   const [workingSeconds, setWorkingSeconds] = useState(0);
@@ -62,28 +70,34 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   // Recorded Break Times for Today
   const [lunchTakenSec, setLunchTakenSec] = useState(() => {
     try {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = new Date().toISOString().split("T")[0];
       return Number(localStorage.getItem(`pms_lunch_taken_${todayStr}`) || 0);
-    } catch (_) { return 0; }
+    } catch (_) {
+      return 0;
+    }
   });
   const [teaTakenSec, setTeaTakenSec] = useState(() => {
     try {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = new Date().toISOString().split("T")[0];
       return Number(localStorage.getItem(`pms_tea_taken_${todayStr}`) || 0);
-    } catch (_) { return 0; }
+    } catch (_) {
+      return 0;
+    }
   });
 
   // Recorded Custom Breaks for Today
   const [customBreaksList, setCustomBreaksList] = useState(() => {
     try {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = new Date().toISOString().split("T")[0];
       const saved = localStorage.getItem(`pms_custom_breaks_${todayStr}`);
       return saved ? JSON.parse(saved) : [];
-    } catch (_) { return []; }
+    } catch (_) {
+      return [];
+    }
   });
 
   // Manual Break selection
-  const [breakReason, setBreakReason] = useState('Personal Break');
+  const [breakReason, setBreakReason] = useState("Personal Break");
   const [breakDuration, setBreakDuration] = useState(15);
   const [breakInfo, setBreakInfo] = useState(null);
   const [breakRemainingSec, setBreakRemainingSec] = useState(0);
@@ -96,7 +110,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   const [isCardMinimized, setIsCardMinimized] = useState(false);
 
   const handleMinimize = () => {
-    if (typeof window !== 'undefined' && window.electronAPI?.minimize) {
+    if (typeof window !== "undefined" && window.electronAPI?.minimize) {
       window.electronAPI.minimize();
     } else {
       setIsCardMinimized(true);
@@ -104,20 +118,23 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   };
 
   const handleMaximizeOrToggle = () => {
-    if (typeof window !== 'undefined' && window.electronAPI?.toggleSize) {
+    if (typeof window !== "undefined" && window.electronAPI?.toggleSize) {
       window.electronAPI.toggleSize();
     }
-    setIsCardMinimized(prev => !prev);
+    setIsCardMinimized((prev) => !prev);
   };
 
   // Dynamically adapt Electron window height based on current card view
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.electronAPI?.setHeight) {
+    if (typeof window !== "undefined" && window.electronAPI?.setHeight) {
       if (isCardMinimized) {
         window.electronAPI.setHeight(75);
-      } else if (punchStatus === 'out') {
+      } else if (punchStatus === "out") {
         window.electronAPI.setHeight(280);
-      } else if (activeSeparateCard === 'lunch' || activeSeparateCard === 'tea') {
+      } else if (
+        activeSeparateCard === "lunch" ||
+        activeSeparateCard === "tea"
+      ) {
         window.electronAPI.setHeight(360);
       } else {
         window.electronAPI.setHeight(385);
@@ -140,158 +157,231 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     const h = Math.floor(sec / 3600);
     const m = Math.floor((sec % 3600) / 60);
     const s = sec % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
 
   const formatSecToMS = (totalSec) => {
     const sec = Math.max(0, Math.floor(totalSec));
     const m = Math.floor(sec / 60);
     const s = sec % 60;
-    return `${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+    return `${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
   };
 
   // API caller with dual-candidate fallback
-  const apiCall = useCallback(async (endpoint, method = 'GET', body = null, tokenOverride = null) => {
-    const token = tokenOverride || authToken;
-    const candidates = [getApiBaseUrl(), ...API_BASE_CANDIDATES.filter(u => u !== getApiBaseUrl())];
-    let lastErr = null;
+  const apiCall = useCallback(
+    async (endpoint, method = "GET", body = null, tokenOverride = null) => {
+      const token = tokenOverride || authToken;
+      const candidates = [
+        getApiBaseUrl(),
+        ...API_BASE_CANDIDATES.filter((u) => u !== getApiBaseUrl()),
+      ];
+      let lastErr = null;
 
-    for (const baseUrl of candidates) {
-      try {
-        const options = {
-          method,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+      for (const baseUrl of candidates) {
+        try {
+          const options = {
+            method,
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          };
+          if (body) options.body = JSON.stringify(body);
+          const res = await fetch(`${baseUrl}${endpoint}`, options);
+          const data = await res.json();
+          if (!data.success) {
+            throw new Error(data.message || "API call failed");
           }
-        };
-        if (body) options.body = JSON.stringify(body);
-        const res = await fetch(`${baseUrl}${endpoint}`, options);
-        const data = await res.json();
-        if (!data.success) {
-          throw new Error(data.message || 'API call failed');
+          return data;
+        } catch (err) {
+          lastErr = err;
         }
-        return data;
-      } catch (err) {
-        lastErr = err;
       }
-    }
-    throw lastErr || new Error('Network error');
-  }, [authToken]);
+      throw lastErr || new Error("Network error");
+    },
+    [authToken],
+  );
 
   // Broadcast state changes across windows
   const broadcastSync = (type, payload = {}) => {
     try {
       if (syncChannelRef.current) {
-        syncChannelRef.current.postMessage({ type, payload, timestamp: Date.now() });
+        syncChannelRef.current.postMessage({
+          type,
+          payload,
+          timestamp: Date.now(),
+        });
       }
     } catch (_) {}
   };
 
-  const checkBreakDetails = useCallback(async (token, empId) => {
-    try {
-      const res = await apiCall(`/work-session/check-idle/${empId}`, 'GET', null, token);
-      if (res?.success && res.currentBreak) {
-        const br = res.currentBreak;
-        setBreakInfo(br);
-        if (br.expectedEndTime) {
-          const rem = Math.floor((new Date(br.expectedEndTime).getTime() - Date.now()) / 1000);
-          setBreakRemainingSec(Math.max(0, rem));
+  const checkBreakDetails = useCallback(
+    async (token, empId) => {
+      try {
+        const res = await apiCall(
+          `/work-session/check-idle/${empId}`,
+          "GET",
+          null,
+          token,
+        );
+        if (res?.success && res.currentBreak) {
+          const br = res.currentBreak;
+          setBreakInfo(br);
+          if (br.expectedEndTime) {
+            const rem = Math.floor(
+              (new Date(br.expectedEndTime).getTime() - Date.now()) / 1000,
+            );
+            setBreakRemainingSec(Math.max(0, rem));
+          }
         }
-      }
-    } catch (_) {}
-  }, [apiCall]);
+      } catch (_) {}
+    },
+    [apiCall],
+  );
 
   // Check current server status
-  const refreshStatus = useCallback(async (token, empId) => {
-    if (!token || !empId) return;
-    try {
-      const res = await apiCall(`/work-session/summary/${empId}`, 'GET', null, token);
-      if (res.success && res.data) {
-        const status = String(res.data.status || '').toLowerCase();
-        // Keep today's accumulated delay visible after the widget/app is reopened,
-        // including when the work session has already been completed.
-        const totalIdle = Math.floor((Number(res.data.totalIdleTime) || 0) * 60);
-        const totalBreak = Math.floor((Number(res.data.totalBreakDuration) || 0) * 60);
-        setDelaySeconds(totalIdle + totalBreak);
-        if (Array.isArray(res.data.breaks)) {
-          let lunchSec = 0;
-          let teaSec = 0;
-          const customs = [];
+  const refreshStatus = useCallback(
+    async (token, empId) => {
+      if (!token || !empId) return;
+      try {
+        const res = await apiCall(
+          `/work-session/summary/${empId}`,
+          "GET",
+          null,
+          token,
+        );
+        if (res.success && res.data) {
+          const status = String(res.data.status || "").toLowerCase();
+          // Delay should contain only actual idle time.
+          // Lunch, tea, personal and other breaks must not be added.
+          const totalIdle = Math.floor(
+            (Number(res.data.totalIdleTime) || 0) * 60,
+          );
 
-          res.data.breaks.forEach((b, idx) => {
-            const rawType = String(b.type || b.reason || '').toLowerCase();
-            const durationSec = b.duration
-              ? Math.round(b.duration * 60)
-              : (b.startTime && b.endTime ? Math.max(0, Math.floor((new Date(b.endTime) - new Date(b.startTime)) / 1000)) : 0);
-
-            if (rawType.includes('lunch')) {
-              lunchSec += durationSec;
-            } else if (rawType.includes('tea')) {
-              teaSec += durationSec;
-            } else {
-              customs.push({
-                id: b._id || `cb_${idx}`,
-                type: b.type,
-                reason: b.reason || (rawType.includes('meeting') ? 'Meeting' : (rawType.includes('short') ? 'Short Break' : 'Personal Break')),
-                duration: b.duration || Math.round(durationSec / 60) || 15,
-                takenSec: durationSec,
-                status: b.status || (b.endTime ? 'ended' : 'active'),
-                startTime: b.startTime,
-                endTime: b.endTime
-              });
-            }
+          console.log("DEBUG Delay values:", {
+            totalIdleTimeFromAPI: res.data.totalIdleTime,
+            totalBreakDurationFromAPI: res.data.totalBreakDuration,
+            delaySecondsRestored: totalIdle,
           });
 
-          const todayStr = new Date().toISOString().split('T')[0];
-          if (lunchSec > 0) {
-            setLunchTakenSec(lunchSec);
-            try { localStorage.setItem(`pms_lunch_taken_${todayStr}`, String(lunchSec)); } catch (_) {}
-          }
-          if (teaSec > 0) {
-            setTeaTakenSec(teaSec);
-            try { localStorage.setItem(`pms_tea_taken_${todayStr}`, String(teaSec)); } catch (_) {}
-          }
-          if (customs.length > 0) {
-            setCustomBreaksList(customs);
-            try { localStorage.setItem(`pms_custom_breaks_${todayStr}`, JSON.stringify(customs)); } catch (_) {}
-          }
-        }
+          setDelaySeconds(totalIdle);
 
-        if (status === 'completed') {
-          setPunchStatus('completed');
-          setBreakInfo(null);
-        } else if (status === 'working' || status === 'idle' || status === 'on_break') {
-          setPunchStatus(status === 'on_break' ? 'break' : 'in');
-          if (res.data.startTime) {
-            punchStartTimeRef.current = new Date(res.data.startTime).getTime();
-            // Restore authoritative accumulated work seconds from backend (never counting shutdown time as work)
-            const restoredWorkSec = res.data.totalWorkSeconds !== undefined
-              ? Number(res.data.totalWorkSeconds)
-              : Math.round((Number(res.data.totalWorkDuration) || 0) * 60);
+          setDelaySeconds(totalIdle);
+          if (Array.isArray(res.data.breaks)) {
+            let lunchSec = 0;
+            let teaSec = 0;
+            const customs = [];
 
-            setWorkingSeconds(restoredWorkSec);
-            setIsCurrentlyIdle(status === 'idle');
-            isCurrentlyIdleRef.current = status === 'idle';
-            if (status === 'idle') {
-              setShowIdleModal(true);
-            } else {
-              setShowIdleModal(false);
+            res.data.breaks.forEach((b, idx) => {
+              const rawType = String(b.type || b.reason || "").toLowerCase();
+              const durationSec = b.duration
+                ? Math.round(b.duration * 60)
+                : b.startTime && b.endTime
+                  ? Math.max(
+                      0,
+                      Math.floor(
+                        (new Date(b.endTime) - new Date(b.startTime)) / 1000,
+                      ),
+                    )
+                  : 0;
+
+              if (rawType.includes("lunch")) {
+                lunchSec += durationSec;
+              } else if (rawType.includes("tea")) {
+                teaSec += durationSec;
+              } else {
+                customs.push({
+                  id: b._id || `cb_${idx}`,
+                  type: b.type,
+                  reason:
+                    b.reason ||
+                    (rawType.includes("meeting")
+                      ? "Meeting"
+                      : rawType.includes("short")
+                        ? "Short Break"
+                        : "Personal Break"),
+                  duration: b.duration || Math.round(durationSec / 60) || 15,
+                  takenSec: durationSec,
+                  status: b.status || (b.endTime ? "ended" : "active"),
+                  startTime: b.startTime,
+                  endTime: b.endTime,
+                });
+              }
+            });
+
+            const todayStr = new Date().toISOString().split("T")[0];
+            if (lunchSec > 0) {
+              setLunchTakenSec(lunchSec);
+              try {
+                localStorage.setItem(
+                  `pms_lunch_taken_${todayStr}`,
+                  String(lunchSec),
+                );
+              } catch (_) {}
             }
-            lastActivityTimeRef.current = Date.now();
+            if (teaSec > 0) {
+              setTeaTakenSec(teaSec);
+              try {
+                localStorage.setItem(
+                  `pms_tea_taken_${todayStr}`,
+                  String(teaSec),
+                );
+              } catch (_) {}
+            }
+            if (customs.length > 0) {
+              setCustomBreaksList(customs);
+              try {
+                localStorage.setItem(
+                  `pms_custom_breaks_${todayStr}`,
+                  JSON.stringify(customs),
+                );
+              } catch (_) {}
+            }
           }
-          if (status === 'on_break') {
-            checkBreakDetails(token, empId);
+
+          if (status === "completed") {
+            setPunchStatus("completed");
+            setBreakInfo(null);
+          } else if (
+            status === "working" ||
+            status === "idle" ||
+            status === "on_break"
+          ) {
+            setPunchStatus(status === "on_break" ? "break" : "in");
+            if (res.data.startTime) {
+              punchStartTimeRef.current = new Date(
+                res.data.startTime,
+              ).getTime();
+              // Restore authoritative accumulated work seconds from backend (never counting shutdown time as work)
+              const restoredWorkSec =
+                res.data.totalWorkSeconds !== undefined
+                  ? Number(res.data.totalWorkSeconds)
+                  : Math.round((Number(res.data.totalWorkDuration) || 0) * 60);
+
+              setWorkingSeconds(restoredWorkSec);
+              setIsCurrentlyIdle(status === "idle");
+              isCurrentlyIdleRef.current = status === "idle";
+              if (status === "idle") {
+                setShowIdleModal(true);
+              } else {
+                setShowIdleModal(false);
+              }
+              lastActivityTimeRef.current = Date.now();
+            }
+            if (status === "on_break") {
+              checkBreakDetails(token, empId);
+            }
+          } else {
+            setPunchStatus("out");
+            setBreakInfo(null);
           }
-        } else {
-          setPunchStatus('out');
-          setBreakInfo(null);
         }
+      } catch (err) {
+        console.warn("Status refresh error:", err.message);
       }
-    } catch (err) {
-      console.warn('Status refresh error:', err.message);
-    }
-  }, [apiCall, checkBreakDetails]);
+    },
+    [apiCall, checkBreakDetails],
+  );
 
   // Mount setup
   useEffect(() => {
@@ -304,11 +394,11 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     }
 
     try {
-      const channel = new BroadcastChannel('pms_attendance_sync');
+      const channel = new BroadcastChannel("pms_attendance_sync");
       syncChannelRef.current = channel;
       channel.onmessage = (event) => {
         const { type } = event.data || {};
-        if (type === 'STATE_UPDATED') {
+        if (type === "STATE_UPDATED") {
           const d = getStoredStaffDetails();
           if (d) refreshStatus(d.token, d.user.employeeId);
         }
@@ -317,22 +407,27 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
     return () => {
       if (syncChannelRef.current) syncChannelRef.current.close();
-      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+      if (heartbeatIntervalRef.current)
+        clearInterval(heartbeatIntervalRef.current);
     };
   }, [refreshStatus]);
 
-  // Detect human activity and resume an idle session only after the server confirms it.
+  // Detect local and global mouse/keyboard activity.
+  // Resume idle only after the server confirms it.
   useEffect(() => {
     let mounted = true;
 
     const onUserActivity = async () => {
       const now = Date.now();
+
+      // Always update the latest activity timestamp.
       lastActivityTimeRef.current = now;
 
-      // Do not resume sessions that are not actively punched in.
-      if (punchStatus !== 'in') return;
+      // Only report activity for an active working session.
+      if (punchStatus !== "in") return;
 
       const idleSession = isCurrentlyIdleRef.current || showIdleModal;
+
       if (!idleSession || !employeeId || !authToken) return;
       if (activityReportInProgressRef.current) return;
       if (now - lastActivityReportTimeRef.current < 1500) return;
@@ -341,14 +436,14 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       activityReportInProgressRef.current = true;
 
       try {
-        const res = await apiCall('/work-session/report-idle', 'POST', {
+        const res = await apiCall("/work-session/report-idle", "POST", {
           employeeId,
-          activityType: 'human'
+          activityType: "human",
         });
 
         if (!mounted || !res?.success) return;
 
-        // Only clear idle after the backend has accepted the activity.
+        // Resume only after backend confirmation.
         isCurrentlyIdleRef.current = false;
         setIsCurrentlyIdle(false);
         setShowIdleModal(false);
@@ -356,35 +451,57 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         if (res.data?.totalWorkSeconds !== undefined) {
           setWorkingSeconds(Number(res.data.totalWorkSeconds));
         } else if (res.data?.totalWorkDuration !== undefined) {
-          setWorkingSeconds(Math.round(Number(res.data.totalWorkDuration) * 60));
+          setWorkingSeconds(
+            Math.round(Number(res.data.totalWorkDuration) * 60),
+          );
         }
 
-        broadcastSync('STATE_UPDATED', { status: 'working' });
+        broadcastSync("STATE_UPDATED", { status: "working" });
       } catch (err) {
-        console.warn('Activity report error:', err.message);
+        console.warn("Activity report error:", err.message);
       } finally {
         activityReportInProgressRef.current = false;
       }
     };
 
     const events = [
-      'mousemove', 'mousedown', 'keydown', 'keyup',
-      'input', 'wheel', 'touchstart', 'pointerdown'
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "keyup",
+      "input",
+      "wheel",
+      "touchstart",
+      "pointerdown",
     ];
-    events.forEach(eventName =>
-      window.addEventListener(eventName, onUserActivity, { passive: true })
-    );
 
+    events.forEach((eventName) => {
+      window.addEventListener(eventName, onUserActivity, {
+        passive: true,
+      });
+    });
+
+    // Electron global keyboard activity
     const removeGlobalKeyboardListener =
       window.electronAPI?.onGlobalKeyboardActivity?.(onUserActivity);
 
+    // Electron global mouse activity
+    const removeGlobalMouseListener =
+      window.electronAPI?.onGlobalMouseActivity?.(onUserActivity);
+
     return () => {
       mounted = false;
-      events.forEach(eventName =>
-        window.removeEventListener(eventName, onUserActivity)
-      );
-      if (typeof removeGlobalKeyboardListener === 'function') {
+
+      events.forEach((eventName) => {
+        window.removeEventListener(eventName, onUserActivity);
+      });
+
+      if (typeof removeGlobalKeyboardListener === "function") {
         removeGlobalKeyboardListener();
+      }
+
+      if (typeof removeGlobalMouseListener === "function") {
+        removeGlobalMouseListener();
       }
     };
   }, [punchStatus, showIdleModal, employeeId, authToken, apiCall]);
@@ -396,13 +513,17 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       setCurrentTime(now);
 
       const nowHours = now.getHours();
-      const todayStr = now.toISOString().split('T')[0];
+      const todayStr = now.toISOString().split("T")[0];
 
       // 🍱 1:00 PM (13:00) Lunch Break Auto-Trigger
-      if (nowHours === 13 && punchStatus === 'in' && activeSeparateCard === null) {
+      if (
+        nowHours === 13 &&
+        punchStatus === "in" &&
+        activeSeparateCard === null
+      ) {
         const lunchDoneKey = `pms_lunch_done_${todayStr}`;
         if (!localStorage.getItem(lunchDoneKey)) {
-          setActiveSeparateCard('lunch');
+          setActiveSeparateCard("lunch");
           setScheduledBreakRemaining(45 * 60);
           setScheduledBreakElapsed(0);
           setScheduledBreakRunning(false);
@@ -410,10 +531,14 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       }
 
       // ☕ 5:00 PM (17:00) Tea Break Auto-Trigger
-      if (nowHours === 17 && punchStatus === 'in' && activeSeparateCard === null) {
+      if (
+        nowHours === 17 &&
+        punchStatus === "in" &&
+        activeSeparateCard === null
+      ) {
         const teaDoneKey = `pms_tea_done_${todayStr}`;
         if (!localStorage.getItem(teaDoneKey)) {
-          setActiveSeparateCard('tea');
+          setActiveSeparateCard("tea");
           setScheduledBreakRemaining(15 * 60);
           setScheduledBreakElapsed(0);
           setScheduledBreakRunning(false);
@@ -422,34 +547,37 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
       // If Active Scheduled Break is Running:
       if (activeSeparateCard && scheduledBreakRunning) {
-        setScheduledBreakElapsed(prev => prev + 1);
-        setScheduledBreakRemaining(prev => Math.max(0, prev - 1));
+        setScheduledBreakElapsed((prev) => prev + 1);
+        setScheduledBreakRemaining((prev) => Math.max(0, prev - 1));
         // Add to delay time every second during lunch/tea break
-        setDelaySeconds(prev => prev + 1);
 
-        if (activeSeparateCard === 'lunch') {
-          setLunchTakenSec(prev => {
+        if (activeSeparateCard === "lunch") {
+          setLunchTakenSec((prev) => {
             const next = prev + 1;
-            try { localStorage.setItem(`pms_lunch_taken_${todayStr}`, String(next)); } catch (_) {}
+            try {
+              localStorage.setItem(`pms_lunch_taken_${todayStr}`, String(next));
+            } catch (_) {}
             return next;
           });
-        } else if (activeSeparateCard === 'tea') {
-          setTeaTakenSec(prev => {
+        } else if (activeSeparateCard === "tea") {
+          setTeaTakenSec((prev) => {
             const next = prev + 1;
-            try { localStorage.setItem(`pms_tea_taken_${todayStr}`, String(next)); } catch (_) {}
+            try {
+              localStorage.setItem(`pms_tea_taken_${todayStr}`, String(next));
+            } catch (_) {}
             return next;
           });
         }
 
         // Check if scheduled break duration finished
         if (scheduledBreakRemaining <= 1) {
-          if (activeSeparateCard === 'lunch') setShowLunchFinished(true);
-          if (activeSeparateCard === 'tea') setShowTeaFinished(true);
+          if (activeSeparateCard === "lunch") setShowLunchFinished(true);
+          if (activeSeparateCard === "tea") setShowTeaFinished(true);
         }
       }
 
       // If working normally (not on scheduled break card):
-      if (punchStatus === 'in' && activeSeparateCard === null) {
+      if (punchStatus === "in" && activeSeparateCard === null) {
         const idleForSec = (Date.now() - lastActivityTimeRef.current) / 1000;
 
         if (idleForSec > 60) {
@@ -459,27 +587,28 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             setIsCurrentlyIdle(true);
             setShowIdleModal(true);
           }
-          setDelaySeconds(prev => prev + 1);
+          setDelaySeconds((prev) => prev + 1);
         } else if (!isCurrentlyIdleRef.current) {
-          setWorkingSeconds(prev => prev + 1);
+          setWorkingSeconds((prev) => prev + 1);
         }
       }
 
       // If on standard manual break:
-      if (punchStatus === 'break' && activeSeparateCard === null) {
-        setDelaySeconds(prev => prev + 1);
+      if (punchStatus === "break" && activeSeparateCard === null) {
         if (breakInfo?.expectedEndTime) {
-          const rem = Math.floor((new Date(breakInfo.expectedEndTime).getTime() - Date.now()) / 1000);
+          const rem = Math.floor(
+            (new Date(breakInfo.expectedEndTime).getTime() - Date.now()) / 1000,
+          );
           setBreakRemainingSec(Math.max(0, rem));
         }
-        setCustomBreaksList(prev => {
+        setCustomBreaksList((prev) => {
           if (!prev || prev.length === 0) return prev;
           const updated = [...prev];
           const lastIdx = updated.length - 1;
-          if (updated[lastIdx]?.status === 'active') {
+          if (updated[lastIdx]?.status === "active") {
             updated[lastIdx] = {
               ...updated[lastIdx],
-              takenSec: (updated[lastIdx].takenSec || 0) + 1
+              takenSec: (updated[lastIdx].takenSec || 0) + 1,
             };
             return updated;
           }
@@ -489,28 +618,38 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [punchStatus, activeSeparateCard, scheduledBreakRunning, scheduledBreakRemaining, breakInfo, showIdleModal]);
+  }, [
+    punchStatus,
+    activeSeparateCard,
+    scheduledBreakRunning,
+    scheduledBreakRemaining,
+    breakInfo,
+    showIdleModal,
+  ]);
 
   // Periodic Heartbeat to Server (every 30s)
   useEffect(() => {
-    if (punchStatus !== 'in' && punchStatus !== 'break') {
-      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+    if (punchStatus !== "in" && punchStatus !== "break") {
+      if (heartbeatIntervalRef.current)
+        clearInterval(heartbeatIntervalRef.current);
       return;
     }
 
     heartbeatIntervalRef.current = setInterval(async () => {
       try {
-        const currentActiveSec = (Date.now() - lastActivityTimeRef.current) / 1000;
-        await apiCall('/work-session/heartbeat', 'POST', {
+        const currentActiveSec =
+          (Date.now() - lastActivityTimeRef.current) / 1000;
+        await apiCall("/work-session/heartbeat", "POST", {
           employeeId,
           isIdle: currentActiveSec > 60,
-          activityType: 'heartbeat'
+          activityType: "heartbeat",
         });
       } catch (_) {}
     }, 30000);
 
     return () => {
-      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+      if (heartbeatIntervalRef.current)
+        clearInterval(heartbeatIntervalRef.current);
     };
   }, [punchStatus, employeeId, apiCall]);
 
@@ -519,33 +658,33 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     if (isLoading) return;
 
     setIsLoading(true);
-    setError('');
+    setError("");
 
     try {
       let res;
 
       try {
-        res = await apiCall('/work-session/handle-idle', 'POST', {
+        res = await apiCall("/work-session/handle-idle", "POST", {
           employeeId,
-          action: 'continue'
+          action: "continue",
         });
       } catch (primaryError) {
         // Compatibility fallback for backends that resume through report-idle.
-        res = await apiCall('/work-session/report-idle', 'POST', {
+        res = await apiCall("/work-session/report-idle", "POST", {
           employeeId,
-          activityType: 'human'
+          activityType: "human",
         });
       }
 
       if (!res?.success) {
-        throw new Error('The server did not confirm that the session resumed.');
+        throw new Error("The server did not confirm that the session resumed.");
       }
 
       lastActivityTimeRef.current = Date.now();
       isCurrentlyIdleRef.current = false;
       setIsCurrentlyIdle(false);
       setShowIdleModal(false);
-      setPunchStatus('in');
+      setPunchStatus("in");
 
       if (res.data?.totalWorkSeconds !== undefined) {
         setWorkingSeconds(Number(res.data.totalWorkSeconds));
@@ -553,13 +692,13 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         setWorkingSeconds(Math.round(Number(res.data.totalWorkDuration) * 60));
       }
 
-      broadcastSync('STATE_UPDATED', { status: 'working' });
+      broadcastSync("STATE_UPDATED", { status: "working" });
     } catch (err) {
       // Keep the idle state visible when the server has not resumed the session.
       setIsCurrentlyIdle(true);
       isCurrentlyIdleRef.current = true;
       setShowIdleModal(true);
-      setError(err.message || 'Unable to resume work. Please try again.');
+      setError(err.message || "Unable to resume work. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -567,22 +706,22 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
   const handleStartWorking = async () => {
     setIsLoading(true);
-    setError('');
+    setError("");
     try {
-      await apiCall('/work-session/start', 'POST', {
+      await apiCall("/work-session/start", "POST", {
         employeeId,
-        notes: `Started from ${location}`
+        notes: `Started from ${location}`,
       });
-      setPunchStatus('in');
+      setPunchStatus("in");
       isCurrentlyIdleRef.current = false;
       setIsCurrentlyIdle(false);
       setShowIdleModal(false);
       punchStartTimeRef.current = Date.now();
       lastActivityTimeRef.current = Date.now();
-      broadcastSync('STATE_UPDATED', { status: 'working' });
+      broadcastSync("STATE_UPDATED", { status: "working" });
       await refreshStatus(authToken, employeeId);
     } catch (err) {
-      setError(err.message || 'Unable to start work');
+      setError(err.message || "Unable to start work");
     } finally {
       setIsLoading(false);
     }
@@ -591,21 +730,21 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   // Start Scheduled Break (Lunch: 45m, Tea: 15m)
   const handleStartScheduledBreak = async (type, durationMin) => {
     setIsLoading(true);
-    setError('');
+    setError("");
     try {
-      await apiCall('/work-session/break', 'POST', {
+      await apiCall("/work-session/break", "POST", {
         employeeId,
         type,
         breakType: type,
         duration: durationMin,
         durationMinutes: durationMin,
-        reason: type
+        reason: type,
       });
       setScheduledBreakRunning(true);
       setScheduledBreakRemaining(durationMin * 60);
       setScheduledBreakElapsed(0);
-      setPunchStatus('break');
-      broadcastSync('STATE_UPDATED', { status: 'on_break', type });
+      setPunchStatus("break");
+      broadcastSync("STATE_UPDATED", { status: "on_break", type });
     } catch (err) {
       setError(err.message || `Unable to start ${type} break`);
       setScheduledBreakRunning(true);
@@ -616,104 +755,204 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   };
 
   // Finish Scheduled Break and Resume Work
+
   const handleFinishScheduledBreak = async () => {
+    if (isLoading) return;
+
     setIsLoading(true);
-    setError('');
-    const todayStr = new Date().toISOString().split('T')[0];
+    setError("");
+
+    const todayStr = new Date().toISOString().split("T")[0];
+    const breakType = activeSeparateCard;
 
     try {
-      await apiCall('/work-session/end-break', 'POST', { employeeId });
-    } catch (_) {}
+      const res = await apiCall("/work-session/end-break", "POST", {
+        employeeId,
+      });
 
-    try {
-      if (activeSeparateCard === 'lunch') {
-        localStorage.setItem(`pms_lunch_done_${todayStr}`, '1');
-      } else if (activeSeparateCard === 'tea') {
-        localStorage.setItem(`pms_tea_done_${todayStr}`, '1');
+      const actualBreak = res?.data?.break;
+
+      if (!actualBreak) {
+        throw new Error("Break ended, but actual duration was not returned.");
       }
-    } catch (_) {}
 
-    setScheduledBreakRunning(false);
-    setActiveSeparateCard(null);
-    setShowLunchFinished(false);
-    setShowTeaFinished(false);
-    setPunchStatus('in');
-    isCurrentlyIdleRef.current = false;
-    setIsCurrentlyIdle(false);
-    setShowIdleModal(false);
-    lastActivityTimeRef.current = Date.now();
-    broadcastSync('STATE_UPDATED', { status: 'working' });
-    setIsLoading(false);
-    await refreshStatus(authToken, employeeId);
+      const actualSeconds = Math.max(
+        0,
+        Number(
+          actualBreak.durationSeconds ??
+            Math.round(Number(actualBreak.duration || 0) * 60),
+        ),
+      );
+
+      console.log("Actual completed break:", {
+        type: actualBreak.type,
+        startTime: actualBreak.startTime,
+        endTime: actualBreak.endTime,
+        durationSeconds: actualSeconds,
+        durationFormatted: formatSecToMS(actualSeconds),
+      });
+
+      // Stop the live timer. Do not add elapsed time again:
+      // refreshStatus will restore the saved totals from the backend.
+      setScheduledBreakRunning(false);
+      setScheduledBreakElapsed(actualSeconds);
+      setScheduledBreakRemaining(0);
+
+      if (breakType === "lunch") {
+        localStorage.setItem(`pms_lunch_done_${todayStr}`, "1");
+      }
+
+      if (breakType === "tea") {
+        localStorage.setItem(`pms_tea_done_${todayStr}`, "1");
+      }
+
+      setActiveSeparateCard(null);
+      setShowLunchFinished(false);
+      setShowTeaFinished(false);
+      setPunchStatus("in");
+
+      isCurrentlyIdleRef.current = false;
+      setIsCurrentlyIdle(false);
+      setShowIdleModal(false);
+      lastActivityTimeRef.current = Date.now();
+
+      broadcastSync("STATE_UPDATED", { status: "working" });
+
+      // Backend's saved break records are the source of truth.
+      await refreshStatus(authToken, employeeId);
+    } catch (err) {
+      setError(err.message || "Unable to finish break");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Manual generic break (Personal Break, Meeting, etc.)
   const handleStartManualBreak = async () => {
     setIsLoading(true);
-    setError('');
+    setError("");
     try {
-      const normalizedType = breakReason.toLowerCase().includes('meeting') ? 'other' : 'personal';
-      const res = await apiCall('/work-session/break', 'POST', {
+      const normalizedType = breakReason.toLowerCase().includes("meeting")
+        ? "other"
+        : "personal";
+      const res = await apiCall("/work-session/break", "POST", {
         employeeId,
         type: normalizedType,
         breakType: normalizedType,
         duration: breakDuration,
         durationMinutes: breakDuration,
-        reason: normalizedType
+        reason: normalizedType,
       });
-      setPunchStatus('break');
+      setPunchStatus("break");
       setBreakRemainingSec(breakDuration * 60);
       if (res?.data?.currentBreak) setBreakInfo(res.data.currentBreak);
       else if (res?.data?.break) setBreakInfo(res.data.break);
 
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = new Date().toISOString().split("T")[0];
       const newCustomBreak = {
-        id: 'cb_' + Date.now(),
+        id: "cb_" + Date.now(),
         type: normalizedType,
         reason: breakReason,
         duration: breakDuration,
         takenSec: 0,
-        status: 'active',
+        status: "active",
         startTime: new Date().toISOString(),
-        endTime: null
+        endTime: null,
       };
-      setCustomBreaksList(prev => {
+      setCustomBreaksList((prev) => {
         const next = [...prev, newCustomBreak];
-        try { localStorage.setItem(`pms_custom_breaks_${todayStr}`, JSON.stringify(next)); } catch (_) {}
+        try {
+          localStorage.setItem(
+            `pms_custom_breaks_${todayStr}`,
+            JSON.stringify(next),
+          );
+        } catch (_) {}
         return next;
       });
 
-      broadcastSync('STATE_UPDATED', { status: 'on_break', reason: breakReason });
+      broadcastSync("STATE_UPDATED", {
+        status: "on_break",
+        reason: breakReason,
+      });
     } catch (err) {
-      setError(err.message || 'Unable to take break');
+      setError(err.message || "Unable to take break");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleResumeManualBreak = async () => {
+    if (isLoading) return;
+
     setIsLoading(true);
-    setError('');
+    setError("");
+
     try {
-      await apiCall('/work-session/end-break', 'POST', { employeeId });
-      setPunchStatus('in');
+      const res = await apiCall("/work-session/end-break", "POST", {
+        employeeId,
+      });
+
+      const actualBreak = res?.data?.break;
+
+      if (!actualBreak) {
+        throw new Error("Break ended, but actual duration was not returned.");
+      }
+
+      const actualSeconds = Math.max(
+        0,
+        Number(
+          actualBreak.durationSeconds ??
+            Math.round(Number(actualBreak.duration || 0) * 60),
+        ),
+      );
+
+      console.log("Actual manual break:", {
+        type: actualBreak.type,
+        duration: formatSecToMS(actualSeconds),
+        startTime: actualBreak.startTime,
+        endTime: actualBreak.endTime,
+      });
+
+      const todayStr = new Date().toISOString().split("T")[0];
+
+      setCustomBreaksList((prev) => {
+        const next = prev.map((item) =>
+          item.status === "active"
+            ? {
+                ...item,
+                status: "ended",
+                startTime: actualBreak.startTime || item.startTime,
+                endTime: actualBreak.endTime,
+                duration: actualBreak.duration,
+                takenSec: actualSeconds,
+              }
+            : item,
+        );
+
+        try {
+          localStorage.setItem(
+            `pms_custom_breaks_${todayStr}`,
+            JSON.stringify(next),
+          );
+        } catch (_) {}
+
+        return next;
+      });
+
+      setPunchStatus("in");
       setBreakInfo(null);
+      setBreakRemainingSec(0);
+
       isCurrentlyIdleRef.current = false;
       setIsCurrentlyIdle(false);
       setShowIdleModal(false);
       lastActivityTimeRef.current = Date.now();
 
-      const todayStr = new Date().toISOString().split('T')[0];
-      setCustomBreaksList(prev => {
-        const next = prev.map(cb => cb.status === 'active' ? { ...cb, status: 'ended', endTime: new Date().toISOString() } : cb);
-        try { localStorage.setItem(`pms_custom_breaks_${todayStr}`, JSON.stringify(next)); } catch (_) {}
-        return next;
-      });
+      broadcastSync("STATE_UPDATED", { status: "working" });
 
-      broadcastSync('STATE_UPDATED', { status: 'working' });
       await refreshStatus(authToken, employeeId);
     } catch (err) {
-      setError(err.message || 'Unable to resume work');
+      setError(err.message || "Unable to resume work");
     } finally {
       setIsLoading(false);
     }
@@ -721,32 +960,32 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
   const handleEndWorkDay = async () => {
     setIsLoading(true);
-    setError('');
+    setError("");
     try {
       try {
-        await apiCall('/work-session/end-work', 'POST', {
+        await apiCall("/work-session/end-work", "POST", {
           employeeId,
-          notes: `Work ended at ${new Date().toLocaleTimeString()}`
+          notes: `Work ended at ${new Date().toLocaleTimeString()}`,
         });
       } catch (_) {
-        await apiCall('/work-session/end', 'POST', {
+        await apiCall("/work-session/end", "POST", {
           employeeId,
-          notes: `Work ended at ${new Date().toLocaleTimeString()}`
+          notes: `Work ended at ${new Date().toLocaleTimeString()}`,
         });
       }
-      setPunchStatus('completed');
+      setPunchStatus("completed");
       setActiveSeparateCard(null);
       setShowEndConfirm(false);
-      broadcastSync('STATE_UPDATED', { status: 'completed' });
+      broadcastSync("STATE_UPDATED", { status: "completed" });
     } catch (err) {
-      setError(err.message || 'Unable to end work session');
+      setError(err.message || "Unable to end work session");
     } finally {
       setIsLoading(false);
     }
   };
 
   const getStatusBadge = () => {
-    if (punchStatus === 'in') {
+    if (punchStatus === "in") {
       return (
         <span className="px-3 py-1 rounded-full text-xs font-bold border bg-[#e6f7f4] text-[#00897b] border-[#a3e3d8] flex items-center gap-1.5 shadow-xs">
           <span className="w-2 h-2 rounded-full bg-[#00b09b] animate-pulse" />
@@ -754,8 +993,8 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         </span>
       );
     }
-    if (punchStatus === 'break') {
-      const label = activeSeparateCard === 'lunch' ? 'Lunch Break' : 'On Break';
+    if (punchStatus === "break") {
+      const label = activeSeparateCard === "lunch" ? "Lunch Break" : "On Break";
       return (
         <span className="px-3 py-1 rounded-full text-xs font-bold border bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1.5 shadow-xs">
           <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
@@ -763,7 +1002,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         </span>
       );
     }
-    if (punchStatus === 'completed') {
+    if (punchStatus === "completed") {
       return (
         <span className="px-3 py-1 rounded-full text-xs font-bold border bg-emerald-50 text-emerald-700 border-emerald-200 shadow-xs">
           Work Ended
@@ -778,7 +1017,10 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   };
 
   const renderWindowButtons = () => (
-    <div className="flex items-center gap-1 bg-[#f8fafc] border border-slate-200 rounded-xl p-1" style={{ WebkitAppRegion: 'no-drag' }}>
+    <div
+      className="flex items-center gap-1 bg-[#f8fafc] border border-slate-200 rounded-xl p-1"
+      style={{ WebkitAppRegion: "no-drag" }}
+    >
       <button
         type="button"
         onClick={handleMinimize}
@@ -800,18 +1042,35 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
   if (isCardMinimized) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl px-3.5 py-2 max-w-sm w-full mx-auto flex items-center justify-between select-none animate-slide-in font-sans" style={{ backgroundColor: '#ffffff', WebkitAppRegion: 'drag' }}>
+      <div
+        className="bg-white rounded-2xl border border-slate-200 shadow-2xl px-3.5 py-2 max-w-sm w-full mx-auto flex items-center justify-between select-none animate-slide-in font-sans"
+        style={{ backgroundColor: "#ffffff", WebkitAppRegion: "drag" }}
+      >
         <div className="flex items-center gap-2">
-          <img src="/pms_logo.png" alt="PMS" className="w-5 h-5 object-contain rounded" />
+          <img
+            src="/pms_logo.png"
+            alt="PMS"
+            className="w-5 h-5 object-contain rounded"
+          />
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <span className="font-syne font-bold text-teal-900 text-xs tabular-nums">
-            {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            {currentTime.toLocaleTimeString("en-US", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })}
           </span>
           <span className="text-[10px] font-semibold text-slate-500">
-            Work: <span className="font-bold text-teal-700 tabular-nums">{formatSecToHMS(workingSeconds)}</span>
+            Work:{" "}
+            <span className="font-bold text-teal-700 tabular-nums">
+              {formatSecToHMS(workingSeconds)}
+            </span>
           </span>
         </div>
-        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' }}>
+        <div
+          className="flex items-center gap-1"
+          style={{ WebkitAppRegion: "no-drag" }}
+        >
           <button
             type="button"
             onClick={handleMaximizeOrToggle}
@@ -827,27 +1086,42 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
   return (
     <div className="relative select-none font-sans">
-      
       {/* ============================================================== */}
       {/* 🍱 SEPARATE CARD 1: ACTIVE LUNCH BREAK (1:00 PM - 1:45 PM)     */}
       {/* ============================================================== */}
-      {activeSeparateCard === 'lunch' && (
-        <div className="bg-white rounded-3xl border border-amber-200 shadow-2xl p-3.5 sm:p-4 max-w-[650px] w-full mx-auto relative overflow-hidden animate-slide-in font-sans" style={{ backgroundColor: '#ffffff' }}>
-          
+      {activeSeparateCard === "lunch" && (
+        <div
+          className="bg-white rounded-3xl border border-amber-200 shadow-2xl p-3.5 sm:p-4 max-w-[650px] w-full mx-auto relative overflow-hidden animate-slide-in font-sans"
+          style={{ backgroundColor: "#ffffff" }}
+        >
           {/* Draggable header bar */}
-          <div className="flex justify-between items-center pb-2 mb-2 border-b border-amber-100" style={{ WebkitAppRegion: 'drag' }}>
+          <div
+            className="flex justify-between items-center pb-2 mb-2 border-b border-amber-100"
+            style={{ WebkitAppRegion: "drag" }}
+          >
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-xl bg-white border border-amber-200 flex items-center justify-center p-1 shadow-sm overflow-hidden">
-                <img src="/pms_logo.png" alt="PMS" className="w-full h-full object-contain" />
+                <img
+                  src="/pms_logo.png"
+                  alt="PMS"
+                  className="w-full h-full object-contain"
+                />
               </div>
               <div>
-                <h3 className="font-syne font-extrabold text-amber-950 text-sm leading-tight">LUNCH BREAK ACTIVE</h3>
-                <p className="text-[10px] font-semibold text-amber-700">1:00 PM – 1:45 PM (45 Minutes)</p>
+                <h3 className="font-syne font-extrabold text-amber-950 text-sm leading-tight">
+                  LUNCH BREAK ACTIVE
+                </h3>
+                <p className="text-[10px] font-semibold text-amber-700">
+                  1:00 PM – 1:45 PM (45 Minutes)
+                </p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' }}>
+            <div
+              className="flex items-center gap-1.5"
+              style={{ WebkitAppRegion: "no-drag" }}
+            >
               <span className="text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full">
-                {scheduledBreakRunning ? 'Active' : '1:00 PM'}
+                {scheduledBreakRunning ? "Active" : "1:00 PM"}
               </span>
               {renderWindowButtons()}
             </div>
@@ -856,10 +1130,16 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           {/* Clock Display */}
           <div className="text-center py-2 mb-3 bg-white border border-amber-100 rounded-2xl shadow-xs">
             <div className="font-syne font-extrabold text-3xl text-amber-900 tabular-nums">
-              {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              {currentTime.toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
             </div>
             <p className="text-[11px] text-amber-700 mt-1">
-              {scheduledBreakRunning ? 'Lunch in progress' : 'Lunch break is ready for you!'}
+              {scheduledBreakRunning
+                ? "Lunch in progress"
+                : "Lunch break is ready for you!"}
             </p>
           </div>
 
@@ -889,21 +1169,29 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           {showLunchFinished && (
             <div className="mb-3 p-3 bg-emerald-50 border border-emerald-300 rounded-2xl text-center">
               <span className="text-2xl">🔔</span>
-              <h4 className="font-syne font-bold text-emerald-900 text-xs mt-1">Lunch Time Finished!</h4>
-              <p className="text-[11px] text-emerald-700 font-medium">Continue your work, your lunch time finished!</p>
+              <h4 className="font-syne font-bold text-emerald-900 text-xs mt-1">
+                Lunch Time Finished!
+              </h4>
+              <p className="text-[11px] text-emerald-700 font-medium">
+                Continue your work, your lunch time finished!
+              </p>
             </div>
           )}
 
           {/* Action Buttons */}
-          <div className="space-y-2" style={{ WebkitAppRegion: 'no-drag' }}>
+          <div className="space-y-2" style={{ WebkitAppRegion: "no-drag" }}>
             {!scheduledBreakRunning ? (
               <button
                 type="button"
-                onClick={() => handleStartScheduledBreak('lunch', 45)}
+                onClick={() => handleStartScheduledBreak("lunch", 45)}
                 disabled={isLoading}
                 className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
               >
-                {isLoading ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <FiPlay />}
+                {isLoading ? (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <FiPlay />
+                )}
                 ACTIVE LUNCH (START 45 MINS) 🍱
               </button>
             ) : (
@@ -913,7 +1201,11 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 disabled={isLoading}
                 className="w-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
               >
-                {isLoading ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <FiCheckCircle />}
+                {isLoading ? (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <FiCheckCircle />
+                )}
                 FINISH LUNCH & RESUME WORK 🚀
               </button>
             )}
@@ -924,22 +1216,38 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       {/* ============================================================== */}
       {/* ☕ SEPARATE CARD 2: ACTIVE TEA BREAK (5:00 PM - 5:15 PM)       */}
       {/* ============================================================== */}
-      {activeSeparateCard === 'tea' && (
-        <div className="bg-white rounded-3xl border border-teal-200 shadow-2xl p-3.5 sm:p-4 max-w-[650px] w-full mx-auto relative overflow-hidden animate-slide-in font-sans" style={{ backgroundColor: '#ffffff' }}>
-          
-          <div className="flex justify-between items-center pb-2 mb-2 border-b border-teal-100" style={{ WebkitAppRegion: 'drag' }}>
+      {activeSeparateCard === "tea" && (
+        <div
+          className="bg-white rounded-3xl border border-teal-200 shadow-2xl p-3.5 sm:p-4 max-w-[650px] w-full mx-auto relative overflow-hidden animate-slide-in font-sans"
+          style={{ backgroundColor: "#ffffff" }}
+        >
+          <div
+            className="flex justify-between items-center pb-2 mb-2 border-b border-teal-100"
+            style={{ WebkitAppRegion: "drag" }}
+          >
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-xl bg-white border border-teal-200 flex items-center justify-center p-1 shadow-sm overflow-hidden">
-                <img src="/pms_logo.png" alt="PMS" className="w-full h-full object-contain" />
+                <img
+                  src="/pms_logo.png"
+                  alt="PMS"
+                  className="w-full h-full object-contain"
+                />
               </div>
               <div>
-                <h3 className="font-syne font-extrabold text-teal-950 text-sm leading-tight">TEA BREAK ACTIVE</h3>
-                <p className="text-[10px] font-semibold text-teal-700">5:00 PM – 5:15 PM (15 Minutes)</p>
+                <h3 className="font-syne font-extrabold text-teal-950 text-sm leading-tight">
+                  TEA BREAK ACTIVE
+                </h3>
+                <p className="text-[10px] font-semibold text-teal-700">
+                  5:00 PM – 5:15 PM (15 Minutes)
+                </p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' }}>
+            <div
+              className="flex items-center gap-1.5"
+              style={{ WebkitAppRegion: "no-drag" }}
+            >
               <span className="text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200 px-2 py-0.5 rounded-full">
-                {scheduledBreakRunning ? 'Active' : '5:00 PM'}
+                {scheduledBreakRunning ? "Active" : "5:00 PM"}
               </span>
               {renderWindowButtons()}
             </div>
@@ -947,10 +1255,16 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
           <div className="text-center py-2 mb-3 bg-white border border-teal-100 rounded-2xl shadow-xs">
             <div className="font-syne font-extrabold text-3xl text-teal-900 tabular-nums">
-              {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              {currentTime.toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
             </div>
             <p className="text-[11px] text-teal-700 mt-1">
-              {scheduledBreakRunning ? 'Tea break in progress' : 'Time for a quick tea break!'}
+              {scheduledBreakRunning
+                ? "Tea break in progress"
+                : "Time for a quick tea break!"}
             </p>
           </div>
 
@@ -978,20 +1292,28 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           {showTeaFinished && (
             <div className="mb-3 p-3 bg-emerald-50 border border-emerald-300 rounded-2xl text-center">
               <span className="text-2xl">🔔</span>
-              <h4 className="font-syne font-bold text-emerald-900 text-xs mt-1">Tea Break Finished!</h4>
-              <p className="text-[11px] text-emerald-700 font-medium">Continue your work, your tea break finished!</p>
+              <h4 className="font-syne font-bold text-emerald-900 text-xs mt-1">
+                Tea Break Finished!
+              </h4>
+              <p className="text-[11px] text-emerald-700 font-medium">
+                Continue your work, your tea break finished!
+              </p>
             </div>
           )}
 
-          <div className="space-y-2" style={{ WebkitAppRegion: 'no-drag' }}>
+          <div className="space-y-2" style={{ WebkitAppRegion: "no-drag" }}>
             {!scheduledBreakRunning ? (
               <button
                 type="button"
-                onClick={() => handleStartScheduledBreak('tea', 15)}
+                onClick={() => handleStartScheduledBreak("tea", 15)}
                 disabled={isLoading}
                 className="w-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
               >
-                {isLoading ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <FiPlay />}
+                {isLoading ? (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <FiPlay />
+                )}
                 ACTIVE TEA BREAK (START 15 MINS) ☕
               </button>
             ) : (
@@ -1001,7 +1323,11 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 disabled={isLoading}
                 className="w-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
               >
-                {isLoading ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <FiCheckCircle />}
+                {isLoading ? (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <FiCheckCircle />
+                )}
                 FINISH TEA BREAK & RESUME WORK 🚀
               </button>
             )}
@@ -1013,25 +1339,46 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       {/* 🚀 MAIN CARD: START WORK / WORKING WORKDAY CARD                */}
       {/* ============================================================== */}
       {activeSeparateCard === null && (
-        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xl p-3.5 max-w-[650px] w-full mx-auto relative overflow-hidden transition-all font-sans" style={{ backgroundColor: '#ffffff' }}>
-          
+        <div
+          className="bg-white rounded-3xl border border-slate-200/90 shadow-2xl p-3.5 max-w-[650px] w-full mx-auto relative overflow-hidden transition-all font-sans"
+          style={{ backgroundColor: "#ffffff" }}
+        >
           {/* Top Header - Draggable on desktop wallpaper */}
-          <div className="flex justify-between items-center mb-2.5 pb-2 border-b border-slate-100" style={{ WebkitAppRegion: 'drag' }}>
+          <div
+            className="flex justify-between items-center mb-2.5 pb-2 border-b border-slate-100"
+            style={{ WebkitAppRegion: "drag" }}
+          >
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center p-1 shadow-xs overflow-hidden">
-                <img src="/pms_logo.png" alt="Pixel Mind Solutions" className="w-full h-full object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                <img
+                  src="/pms_logo.png"
+                  alt="Pixel Mind Solutions"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
               </div>
               <div>
-                <h3 className="font-syne font-black text-[#0f2e2e] text-sm leading-tight tracking-tight">Pixel Mind Solutions</h3>
+                <h3 className="font-syne font-black text-[#0f2e2e] text-sm leading-tight tracking-tight">
+                  Pixel Mind Solutions
+                </h3>
                 {staffDetails?.employeeName ? (
-                  <p className="text-[11px] text-slate-500 font-semibold truncate max-w-[180px]">{staffDetails.employeeName}</p>
+                  <p className="text-[11px] text-slate-500 font-semibold truncate max-w-[180px]">
+                    {staffDetails.employeeName}
+                  </p>
                 ) : (
-                  <p className="text-[11px] text-slate-500 font-semibold truncate max-w-[180px]">Kareem Unnisa</p>
+                  <p className="text-[11px] text-slate-500 font-semibold truncate max-w-[180px]">
+                    Kareem Unnisa
+                  </p>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' }}>
+            <div
+              className="flex items-center gap-2"
+              style={{ WebkitAppRegion: "no-drag" }}
+            >
               {getStatusBadge()}
               {renderWindowButtons()}
             </div>
@@ -1040,37 +1387,57 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           {/* Error notification */}
           {error && (
             <div className="mb-2 p-1.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center justify-between">
-              <span className="flex items-center gap-1.5 font-medium"><FiAlertCircle /> {error}</span>
-              <button onClick={() => setError('')} className="text-red-500 font-bold ml-2">×</button>
+              <span className="flex items-center gap-1.5 font-medium">
+                <FiAlertCircle /> {error}
+              </span>
+              <button
+                onClick={() => setError("")}
+                className="text-red-500 font-bold ml-2"
+              >
+                ×
+              </button>
             </div>
           )}
 
           {/* 2-COLUMN HALF-HEIGHT LAYOUT (Clock/Timers on Left, Breaks on Right) */}
-          {(punchStatus === 'in' || punchStatus === 'break') ? (
+          {punchStatus === "in" || punchStatus === "break" ? (
             <div className="grid grid-cols-2 gap-3 items-start">
-              
               {/* ===== LEFT COLUMN: Clock, Location, Live Timers & End Work Day ===== */}
               <div className="space-y-2">
                 {/* Compact Digital Clock Display */}
                 <div className="text-center py-2 px-2.5 bg-slate-50/70 border border-slate-200/90 rounded-2xl shadow-xs">
                   <div className="font-syne font-black text-2xl text-[#063330] tracking-wider tabular-nums leading-none">
-                    {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    {currentTime.toLocaleTimeString("en-US", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })}
                   </div>
                   <p className="text-[10px] font-bold text-slate-500 mt-1">
-                    {currentTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                    {currentTime.toLocaleDateString("en-US", {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
                   </p>
                 </div>
 
                 {/* Location Row */}
-                <div className="relative flex items-center justify-between bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 shadow-xs" style={{ WebkitAppRegion: 'no-drag' }}>
+                <div
+                  className="relative flex items-center justify-between bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 shadow-xs"
+                  style={{ WebkitAppRegion: "no-drag" }}
+                >
                   <div className="flex items-center gap-1.5 flex-1">
                     <FiMapPin className="text-[#00897b] text-xs shrink-0" />
-                    <span className="text-[11px] font-extrabold text-[#063330] shrink-0">Location:</span>
+                    <span className="text-[11px] font-extrabold text-[#063330] shrink-0">
+                      Location:
+                    </span>
                     <select
                       className="flex-1 bg-transparent text-[11px] font-bold text-[#063330] outline-none cursor-pointer appearance-none"
                       value={location}
-                      onChange={e => setLocation(e.target.value)}
-                      disabled={punchStatus !== 'out'}
+                      onChange={(e) => setLocation(e.target.value)}
+                      disabled={punchStatus !== "out"}
                     >
                       <option value="Office">Office</option>
                       <option value="Work From Home">Work From Home</option>
@@ -1084,7 +1451,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-[#f0faf8] border border-[#b2e2d9] rounded-xl p-2 text-center shadow-xs">
                     <div className="text-[9px] font-black uppercase tracking-wider text-[#00897b] flex items-center justify-center gap-1 mb-0.5">
-                      <span className={`w-1.5 h-1.5 rounded-full ${isCurrentlyIdle ? 'bg-slate-300' : 'bg-[#00b09b] animate-pulse'}`} />
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${isCurrentlyIdle ? "bg-slate-300" : "bg-[#00b09b] animate-pulse"}`}
+                      />
                       WORKING
                     </div>
                     <div className="font-syne font-black text-lg text-[#04332d] tabular-nums tracking-wide">
@@ -1092,28 +1461,37 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                     </div>
                   </div>
 
-                  <div className={`border rounded-xl p-2 text-center shadow-xs transition-all ${
-                    isCurrentlyIdle ? 'border-amber-400 ring-1 ring-amber-300 bg-amber-50/40' : 'bg-[#f4f7fb] border-[#cbd5e1]'
-                  }`}>
+                  <div
+                    className={`border rounded-xl p-2 text-center shadow-xs transition-all ${
+                      isCurrentlyIdle
+                        ? "border-amber-400 ring-1 ring-amber-300 bg-amber-50/40"
+                        : "bg-[#f4f7fb] border-[#cbd5e1]"
+                    }`}
+                  >
                     <div className="text-[9px] font-black uppercase tracking-wider text-slate-500 flex items-center justify-center gap-1 mb-0.5">
-                      <span className={`w-1.5 h-1.5 rounded-full ${isCurrentlyIdle ? 'bg-amber-500 animate-ping' : 'bg-slate-400'}`} />
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${isCurrentlyIdle ? "bg-amber-500 animate-ping" : "bg-slate-400"}`}
+                      />
                       DELAY
                     </div>
-                    <div className={`font-syne font-black text-lg tabular-nums tracking-wide ${isCurrentlyIdle ? 'text-amber-700' : 'text-[#1e293b]'}`}>
+                    <div
+                      className={`font-syne font-black text-lg tabular-nums tracking-wide ${isCurrentlyIdle ? "text-amber-700" : "text-[#1e293b]"}`}
+                    >
                       {formatSecToHMS(delaySeconds)}
                     </div>
                   </div>
                 </div>
 
                 {/* END WORK DAY BUTTON */}
-                <div style={{ WebkitAppRegion: 'no-drag' }}>
+                <div style={{ WebkitAppRegion: "no-drag" }}>
                   <button
                     type="button"
                     className="w-full bg-[#fff1f2] hover:bg-[#ffe4e6] text-[#dc2626] border border-[#fecdd3] rounded-xl py-2.5 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                     onClick={() => setShowEndConfirm(true)}
                     disabled={isLoading}
                   >
-                    <FiCheckCircle className="text-red-500 text-xs" /> END WORK DAY
+                    <FiCheckCircle className="text-red-500 text-xs" /> END WORK
+                    DAY
                   </button>
                 </div>
               </div>
@@ -1123,7 +1501,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 <div className="bg-white border border-slate-200 rounded-2xl p-2.5 shadow-xs">
                   <div className="text-[10px] font-black uppercase tracking-wider mb-2 flex items-center justify-between">
                     <span className="text-[#92400e]">BREAK SUMMARY</span>
-                    <span className="text-[9px] font-bold text-slate-400">OFFICE SCHEDULE</span>
+                    <span className="text-[9px] font-bold text-slate-400">
+                      OFFICE SCHEDULE
+                    </span>
                   </div>
 
                   <div className="space-y-1.5 max-h-[145px] overflow-y-auto pr-0.5">
@@ -1132,37 +1512,50 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs">🍱</span>
                         <div>
-                          <span className="font-bold text-slate-800 text-[11px] block leading-tight">Lunch (1:00 - 1:45 PM)</span>
-                          <span className="text-[9px] text-slate-400 font-medium">45 Mins standard</span>
+                          <span className="font-bold text-slate-800 text-[11px] block leading-tight">
+                            Lunch (1:00 - 1:45 PM)
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-medium">
+                            45 Mins standard
+                          </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' }}>
-                        {lunchTakenSec > 0 || (activeSeparateCard === 'lunch' && scheduledBreakRunning) ? (
+                      <div
+                        className="flex items-center gap-1"
+                        style={{ WebkitAppRegion: "no-drag" }}
+                      >
+                        {lunchTakenSec > 0 ||
+                        (activeSeparateCard === "lunch" &&
+                          scheduledBreakRunning) ? (
                           <>
-                            <span className={`font-syne font-black px-2 py-0.5 rounded-md border text-[10px] tabular-nums ${
-                              activeSeparateCard === 'lunch' && scheduledBreakRunning
-                                ? 'text-amber-800 bg-amber-50 border-amber-300 animate-pulse'
-                                : 'text-[#00897b] bg-[#e6f7f4] border-[#a3e3d8]'
-                            }`}>
+                            <span
+                              className={`font-syne font-black px-2 py-0.5 rounded-md border text-[10px] tabular-nums ${
+                                activeSeparateCard === "lunch" &&
+                                scheduledBreakRunning
+                                  ? "text-amber-800 bg-amber-50 border-amber-300 animate-pulse"
+                                  : "text-[#00897b] bg-[#e6f7f4] border-[#a3e3d8]"
+                              }`}
+                            >
                               Taken: {formatSecToMS(lunchTakenSec)}
                             </span>
-                            {activeSeparateCard === 'lunch' && scheduledBreakRunning && (
-                              <button
-                                type="button"
-                                onClick={handleFinishScheduledBreak}
-                                disabled={isLoading}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2 py-0.5 rounded-md transition-all shadow-2xs cursor-pointer flex items-center gap-0.5"
-                              >
-                                <FiPlay className="text-[8px]" /> Resume
-                              </button>
-                            )}
+                            {activeSeparateCard === "lunch" &&
+                              scheduledBreakRunning && (
+                                <button
+                                  type="button"
+                                  onClick={handleFinishScheduledBreak}
+                                  disabled={isLoading}
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2 py-0.5 rounded-md transition-all shadow-2xs cursor-pointer flex items-center gap-0.5"
+                                >
+                                  <FiPlay className="text-[8px]" /> Resume
+                                </button>
+                              )}
                           </>
                         ) : (
                           <button
                             type="button"
                             onClick={() => {
-                              setActiveSeparateCard('lunch');
-                              handleStartScheduledBreak('lunch', 45);
+                              setActiveSeparateCard("lunch");
+                              handleStartScheduledBreak("lunch", 45);
                             }}
                             className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10px] px-2.5 py-0.5 rounded-md transition-all shadow-2xs cursor-pointer flex items-center gap-1"
                           >
@@ -1177,37 +1570,50 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs">☕</span>
                         <div>
-                          <span className="font-bold text-slate-800 text-[11px] block leading-tight">Tea Break (5:00 - 5:15 PM)</span>
-                          <span className="text-[9px] text-slate-400 font-medium">15 Mins standard</span>
+                          <span className="font-bold text-slate-800 text-[11px] block leading-tight">
+                            Tea Break (5:00 - 5:15 PM)
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-medium">
+                            15 Mins standard
+                          </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' }}>
-                        {teaTakenSec > 0 || (activeSeparateCard === 'tea' && scheduledBreakRunning) ? (
+                      <div
+                        className="flex items-center gap-1"
+                        style={{ WebkitAppRegion: "no-drag" }}
+                      >
+                        {teaTakenSec > 0 ||
+                        (activeSeparateCard === "tea" &&
+                          scheduledBreakRunning) ? (
                           <>
-                            <span className={`font-syne font-black px-2 py-0.5 rounded-md border text-[10px] tabular-nums ${
-                              activeSeparateCard === 'tea' && scheduledBreakRunning
-                                ? 'text-teal-800 bg-teal-50 border-teal-300 animate-pulse'
-                                : 'text-[#00897b] bg-[#e6f7f4] border-[#a3e3d8]'
-                            }`}>
+                            <span
+                              className={`font-syne font-black px-2 py-0.5 rounded-md border text-[10px] tabular-nums ${
+                                activeSeparateCard === "tea" &&
+                                scheduledBreakRunning
+                                  ? "text-teal-800 bg-teal-50 border-teal-300 animate-pulse"
+                                  : "text-[#00897b] bg-[#e6f7f4] border-[#a3e3d8]"
+                              }`}
+                            >
                               Taken: {formatSecToMS(teaTakenSec)}
                             </span>
-                            {activeSeparateCard === 'tea' && scheduledBreakRunning && (
-                              <button
-                                type="button"
-                                onClick={handleFinishScheduledBreak}
-                                disabled={isLoading}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2 py-0.5 rounded-md transition-all shadow-2xs cursor-pointer flex items-center gap-0.5"
-                              >
-                                <FiPlay className="text-[8px]" /> Resume
-                              </button>
-                            )}
+                            {activeSeparateCard === "tea" &&
+                              scheduledBreakRunning && (
+                                <button
+                                  type="button"
+                                  onClick={handleFinishScheduledBreak}
+                                  disabled={isLoading}
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2 py-0.5 rounded-md transition-all shadow-2xs cursor-pointer flex items-center gap-0.5"
+                                >
+                                  <FiPlay className="text-[8px]" /> Resume
+                                </button>
+                              )}
                           </>
                         ) : (
                           <button
                             type="button"
                             onClick={() => {
-                              setActiveSeparateCard('tea');
-                              handleStartScheduledBreak('tea', 15);
+                              setActiveSeparateCard("tea");
+                              handleStartScheduledBreak("tea", 15);
                             }}
                             className="bg-teal-600 hover:bg-teal-700 text-white font-bold text-[10px] px-2.5 py-0.5 rounded-md transition-all shadow-2xs cursor-pointer flex items-center gap-1"
                           >
@@ -1220,26 +1626,45 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                     {/* Custom Break Row(s) */}
                     {customBreaksList && customBreaksList.length > 0 ? (
                       customBreaksList.map((cb, idx) => {
-                        const isMeeting = String(cb.reason || cb.type || '').toLowerCase().includes('meeting');
-                        const isActive = cb.status === 'active' && punchStatus === 'break';
-                        const displayReason = cb.reason || (isMeeting ? 'Meeting' : 'Personal Break');
+                        const isMeeting = String(cb.reason || cb.type || "")
+                          .toLowerCase()
+                          .includes("meeting");
+                        const isActive =
+                          cb.status === "active" && punchStatus === "break";
+                        const displayReason =
+                          cb.reason ||
+                          (isMeeting ? "Meeting" : "Personal Break");
                         return (
-                          <div key={cb.id || idx} className="flex items-center justify-between bg-slate-50/50 border border-slate-200/80 rounded-xl px-2.5 py-1.5 shadow-2xs">
+                          <div
+                            key={cb.id || idx}
+                            className="flex items-center justify-between bg-slate-50/50 border border-slate-200/80 rounded-xl px-2.5 py-1.5 shadow-2xs"
+                          >
                             <div className="flex items-center gap-1.5">
-                              <span className="text-xs">{isMeeting ? '💼' : '☕'}</span>
+                              <span className="text-xs">
+                                {isMeeting ? "💼" : "☕"}
+                              </span>
                               <div>
-                                <span className="font-bold text-slate-800 text-[11px] block leading-tight">{displayReason}</span>
+                                <span className="font-bold text-slate-800 text-[11px] block leading-tight">
+                                  {displayReason}
+                                </span>
                                 <span className="text-[9px] text-slate-400 font-medium">
-                                  {cb.duration ? `${cb.duration} Mins custom` : 'Custom'}
+                                  {cb.duration
+                                    ? `${cb.duration} Mins custom`
+                                    : "Custom"}
                                 </span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' }}>
-                              <span className={`font-syne font-black text-[10px] px-2 py-0.5 rounded-md border tabular-nums ${
-                                isActive
-                                  ? 'text-amber-800 bg-amber-50 border-amber-300 animate-pulse'
-                                  : 'text-[#00897b] bg-[#e6f7f4] border-[#a3e3d8]'
-                              }`}>
+                            <div
+                              className="flex items-center gap-1"
+                              style={{ WebkitAppRegion: "no-drag" }}
+                            >
+                              <span
+                                className={`font-syne font-black text-[10px] px-2 py-0.5 rounded-md border tabular-nums ${
+                                  isActive
+                                    ? "text-amber-800 bg-amber-50 border-amber-300 animate-pulse"
+                                    : "text-[#00897b] bg-[#e6f7f4] border-[#a3e3d8]"
+                                }`}
+                              >
                                 Taken: {formatSecToMS(cb.takenSec || 0)}
                               </span>
                               {isActive && (
@@ -1261,11 +1686,18 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs">💼</span>
                           <div>
-                            <span className="font-bold text-slate-800 text-[11px] block leading-tight">{breakReason}</span>
-                            <span className="text-[9px] text-slate-400 font-medium">{breakDuration} Mins custom</span>
+                            <span className="font-bold text-slate-800 text-[11px] block leading-tight">
+                              {breakReason}
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-medium">
+                              {breakDuration} Mins custom
+                            </span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' }}>
+                        <div
+                          className="flex items-center gap-1"
+                          style={{ WebkitAppRegion: "no-drag" }}
+                        >
                           <span className="font-syne font-black text-slate-400 bg-white px-2 py-0.5 rounded-md border border-slate-200 text-[10px] tabular-nums">
                             Taken: 00m 00s
                           </span>
@@ -1276,13 +1708,18 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 </div>
 
                 {/* Custom Break Selector & Action Box */}
-                <div className="bg-white border border-slate-200 rounded-xl p-2 shadow-xs" style={{ WebkitAppRegion: 'no-drag' }}>
+                <div
+                  className="bg-white border border-slate-200 rounded-xl p-2 shadow-xs"
+                  style={{ WebkitAppRegion: "no-drag" }}
+                >
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <span className="text-[11px] font-bold text-slate-700 shrink-0">☕ Break:</span>
+                    <span className="text-[11px] font-bold text-slate-700 shrink-0">
+                      ☕ Break:
+                    </span>
                     <div className="relative flex-1">
                       <select
                         value={breakReason}
-                        onChange={e => setBreakReason(e.target.value)}
+                        onChange={(e) => setBreakReason(e.target.value)}
                         className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg pl-2 pr-5 py-1 text-[11px] font-bold text-slate-800 outline-none cursor-pointer appearance-none transition-all"
                       >
                         <option value="Personal Break">Personal Break</option>
@@ -1294,7 +1731,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                     <div className="relative w-20 shrink-0">
                       <select
                         value={breakDuration}
-                        onChange={e => setBreakDuration(Number(e.target.value))}
+                        onChange={(e) =>
+                          setBreakDuration(Number(e.target.value))
+                        }
                         className="w-full bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg pl-2 pr-4 py-1 text-[11px] font-bold text-slate-800 outline-none cursor-pointer appearance-none transition-all"
                       >
                         <option value={15}>15 Mins</option>
@@ -1312,32 +1751,45 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                     disabled={isLoading}
                     className="w-full bg-[#e8f7f4] hover:bg-[#d4f2ec] text-[#00897b] border border-[#a3e3d8] py-1.5 rounded-lg text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
                   >
-                    Take {breakReason} ({breakDuration}m) {breakReason.toLowerCase().includes('meeting') ? '💼' : '☕'}
+                    Take {breakReason} ({breakDuration}m){" "}
+                    {breakReason.toLowerCase().includes("meeting")
+                      ? "💼"
+                      : "☕"}
                   </button>
                 </div>
               </div>
-
             </div>
           ) : (
             /* Punch Status = 'out' */
-            <div className="space-y-2.5" style={{ WebkitAppRegion: 'no-drag' }}>
+            <div className="space-y-2.5" style={{ WebkitAppRegion: "no-drag" }}>
               <div className="text-center py-2 px-3 bg-slate-50/70 border border-slate-200 rounded-2xl">
                 <div className="font-syne font-black text-2xl text-[#063330] tracking-wider tabular-nums leading-none">
-                  {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  {currentTime.toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })}
                 </div>
                 <p className="text-[11px] font-bold text-slate-500 mt-1">
-                  {currentTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  {currentTime.toLocaleDateString("en-US", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
                 </p>
               </div>
 
               <div className="relative flex items-center justify-between bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
                 <div className="flex items-center gap-2 flex-1">
                   <FiMapPin className="text-[#00897b] text-sm shrink-0" />
-                  <span className="text-xs font-extrabold text-[#063330] shrink-0">Location:</span>
+                  <span className="text-xs font-extrabold text-[#063330] shrink-0">
+                    Location:
+                  </span>
                   <select
                     className="flex-1 bg-transparent text-xs font-bold text-[#063330] outline-none cursor-pointer appearance-none"
                     value={location}
-                    onChange={e => setLocation(e.target.value)}
+                    onChange={(e) => setLocation(e.target.value)}
                   >
                     <option value="Office">Office</option>
                     <option value="Work From Home">Work From Home</option>
@@ -1364,20 +1816,31 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           )}
 
           {/* ================= STATE 3: MANUAL BREAK RUNNING ================= */}
-          {punchStatus === 'break' && (
-            <div className="space-y-2" style={{ WebkitAppRegion: 'no-drag' }}>
+          {punchStatus === "break" && (
+            <div className="space-y-2" style={{ WebkitAppRegion: "no-drag" }}>
               <div className="bg-white border border-amber-200 rounded-xl p-2.5 text-center shadow-xs">
-                <div className="text-lg mb-0.5">{breakReason.toLowerCase().includes('meeting') ? '💼' : '☕'}</div>
-                <div className="font-syne font-bold text-amber-900 text-xs">{breakReason} Active</div>
+                <div className="text-lg mb-0.5">
+                  {breakReason.toLowerCase().includes("meeting") ? "💼" : "☕"}
+                </div>
+                <div className="font-syne font-bold text-amber-900 text-xs">
+                  {breakReason} Active
+                </div>
                 <div className="flex items-center justify-center gap-3 mt-1 text-xs">
                   <div className="text-amber-800 font-semibold">
-                    Time Taken: <span className="font-extrabold font-syne tabular-nums text-amber-950">
-                      {formatSecToMS(customBreaksList.find(cb => cb.status === 'active')?.takenSec || 0)}
+                    Time Taken:{" "}
+                    <span className="font-extrabold font-syne tabular-nums text-amber-950">
+                      {formatSecToMS(
+                        customBreaksList.find((cb) => cb.status === "active")
+                          ?.takenSec || 0,
+                      )}
                     </span>
                   </div>
                   <div className="text-slate-400">•</div>
                   <div className="text-slate-500 font-medium">
-                    Remaining: <span className="font-bold font-syne tabular-nums text-slate-700">{formatSecToMS(breakRemainingSec)}</span>
+                    Remaining:{" "}
+                    <span className="font-bold font-syne tabular-nums text-slate-700">
+                      {formatSecToMS(breakRemainingSec)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1388,20 +1851,29 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 disabled={isLoading}
                 className="w-full bg-gradient-to-r from-teal-500 to-teal-600 text-white py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
               >
-                {isLoading ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <FiPlay />}
+                {isLoading ? (
+                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <FiPlay />
+                )}
                 RESUME WORK 💪
               </button>
             </div>
           )}
 
           {/* ================= STATE 4: WORKDAY COMPLETED ================= */}
-          {punchStatus === 'completed' && (
+          {punchStatus === "completed" && (
             <div className="bg-white border border-teal-200 rounded-2xl p-4 text-center shadow-xs">
               <div className="text-2xl mb-1">🎉</div>
-              <h4 className="font-syne font-bold text-teal-900 text-sm mb-1">Workday Completed!</h4>
-              <p className="text-xs text-slate-500 mb-2">Great work today! You have successfully clocked out.</p>
+              <h4 className="font-syne font-bold text-teal-900 text-sm mb-1">
+                Workday Completed!
+              </h4>
+              <p className="text-xs text-slate-500 mb-2">
+                Great work today! You have successfully clocked out.
+              </p>
               <div className="text-[10px] font-semibold text-teal-800 bg-white border border-teal-100 rounded-lg p-2 inline-block">
-                Total Work: {formatSecToHMS(workingSeconds)} • Delay: {formatSecToHMS(delaySeconds)}
+                Total Work: {formatSecToHMS(workingSeconds)} • Delay:{" "}
+                {formatSecToHMS(delaySeconds)}
               </div>
             </div>
           )}
@@ -1409,15 +1881,21 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       )}
 
       {/* ================= MODAL: IDLE ALERT ================= */}
-      {showIdleModal && punchStatus === 'in' && (
+      {showIdleModal && punchStatus === "in" && (
         <div className="fixed inset-0 bg-teal-950/60 backdrop-blur-sm flex items-center justify-center p-3 z-50">
           <div className="bg-white rounded-2xl border border-teal-100 shadow-2xl p-5 max-w-[320px] w-full text-center animate-slide-in">
             <div className="w-12 h-12 bg-amber-100 border border-amber-200 rounded-2xl flex items-center justify-center mx-auto mb-2 text-xl">
               ⚠️
             </div>
-            <h3 className="font-syne font-extrabold text-teal-900 text-sm mb-1">Hey there! 👋</h3>
-            <p className="text-xs text-slate-500 mb-1">You seem to be away from your desk.</p>
-            <p className="text-xs font-semibold text-amber-700 mb-2">Delay Time: {formatSecToHMS(delaySeconds)}</p>
+            <h3 className="font-syne font-extrabold text-teal-900 text-sm mb-1">
+              Hey there! 👋
+            </h3>
+            <p className="text-xs text-slate-500 mb-1">
+              You seem to be away from your desk.
+            </p>
+            <p className="text-xs font-semibold text-amber-700 mb-2">
+              Delay Time: {formatSecToHMS(delaySeconds)}
+            </p>
             <button
               onClick={handleResumeFromIdle}
               className="w-full bg-teal-600 text-white py-2.5 rounded-xl font-bold shadow-md hover:bg-teal-700 text-xs"
@@ -1435,8 +1913,12 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-2 text-xl font-bold">
               🛑
             </div>
-            <h3 className="font-syne font-bold text-slate-800 text-sm mb-1">End Workday?</h3>
-            <p className="text-xs text-slate-500 mb-3">Are you sure you want to clock out for today?</p>
+            <h3 className="font-syne font-bold text-slate-800 text-sm mb-1">
+              End Workday?
+            </h3>
+            <p className="text-xs text-slate-500 mb-3">
+              Are you sure you want to clock out for today?
+            </p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -1462,4 +1944,3 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 };
 
 export default AttendanceWidget;
-

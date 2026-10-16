@@ -1252,7 +1252,7 @@ const StaffPunchInOut = () => {
       events.forEach(e =>
         window.removeEventListener(e, handleActivity, { passive: true })
       );
-      if (typeof removeGlobalKeyboardListener === 'function') removeGlobalKeyboardListener();
+      // if (typeof removeGlobalKeyboardListener === 'function') removeGlobalKeyboardListener();
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
       if (activityTimerRef.current) clearInterval(activityTimerRef.current);
       if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
