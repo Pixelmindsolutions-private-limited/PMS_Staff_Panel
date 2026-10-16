@@ -150,6 +150,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   const lastActivityReportTimeRef = useRef(0);
   const isCurrentlyIdleRef = useRef(false);
   const activityReportInProgressRef = useRef(false);
+  const statusRefreshRequestRef = useRef(0);
 
   // Format helpers
   const formatSecToHMS = (totalSec) => {
@@ -243,6 +244,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   const refreshStatus = useCallback(
     async (token, empId) => {
       if (!token || !empId) return;
+      const requestId = ++statusRefreshRequestRef.current;
       try {
         const res = await apiCall(
           `/work-session/summary/${empId}`,
@@ -251,20 +253,15 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           token,
         );
         if (res.success && res.data) {
+          // Broadcast refreshes can overlap. Ignore an older response so it
+          // cannot roll the live counters back after a newer server snapshot.
+          if (requestId !== statusRefreshRequestRef.current) return;
           const status = String(res.data.status || "").toLowerCase();
           // Delay should contain only actual idle time.
           // Lunch, tea, personal and other breaks must not be added.
           const totalIdle = Math.floor(
             (Number(res.data.totalIdleTime) || 0) * 60,
           );
-
-          console.log("DEBUG Delay values:", {
-            totalIdleTimeFromAPI: res.data.totalIdleTime,
-            totalBreakDurationFromAPI: res.data.totalBreakDuration,
-            delaySecondsRestored: totalIdle,
-          });
-
-          setDelaySeconds(totalIdle);
 
           setDelaySeconds(totalIdle);
           if (Array.isArray(res.data.breaks)) {
@@ -352,24 +349,60 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
               punchStartTimeRef.current = new Date(
                 res.data.startTime,
               ).getTime();
-              // Restore authoritative accumulated work seconds from backend (never counting shutdown time as work)
+            }
+            if (
+              res.data.totalWorkSeconds !== undefined ||
+              res.data.totalWorkDuration !== undefined
+            ) {
+              // Restore accumulated work from the backend without counting
+              // time while the widget was closed.
               const restoredWorkSec =
                 res.data.totalWorkSeconds !== undefined
                   ? Number(res.data.totalWorkSeconds)
                   : Math.round((Number(res.data.totalWorkDuration) || 0) * 60);
 
               setWorkingSeconds(restoredWorkSec);
-              setIsCurrentlyIdle(status === "idle");
-              isCurrentlyIdleRef.current = status === "idle";
-              if (status === "idle") {
-                setShowIdleModal(true);
-              } else {
-                setShowIdleModal(false);
-              }
-              lastActivityTimeRef.current = Date.now();
             }
+            setIsCurrentlyIdle(status === "idle");
+            isCurrentlyIdleRef.current = status === "idle";
+            setShowIdleModal(status === "idle");
+            lastActivityTimeRef.current = Date.now();
             if (status === "on_break") {
+              const currentBreak = res.data.currentBreak;
+              if (currentBreak) {
+                setBreakInfo(currentBreak);
+                const breakType = String(
+                  currentBreak.type || currentBreak.reason || "",
+                ).toLowerCase();
+                if (breakType.includes("lunch") || breakType.includes("tea")) {
+                  const scheduledType = breakType.includes("lunch")
+                    ? "lunch"
+                    : "tea";
+                  setActiveSeparateCard(scheduledType);
+                  setScheduledBreakRunning(true);
+                  if (currentBreak.expectedEndTime) {
+                    const remaining = Math.max(
+                      0,
+                      Math.floor(
+                        (new Date(currentBreak.expectedEndTime).getTime() -
+                          Date.now()) /
+                          1000,
+                      ),
+                    );
+                    setScheduledBreakRemaining(remaining);
+                    setScheduledBreakElapsed(
+                      Math.max(
+                        0,
+                        (scheduledType === "lunch" ? 45 * 60 : 15 * 60) -
+                          remaining,
+                      ),
+                    );
+                  }
+                }
+              }
               checkBreakDetails(token, empId);
+            } else {
+              setBreakInfo(null);
             }
           } else {
             setPunchStatus("out");
@@ -420,33 +453,33 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     const onUserActivity = async () => {
       const now = Date.now();
 
-      // Always update the latest activity timestamp.
+      // Reset local inactivity timer on real input.
       lastActivityTimeRef.current = now;
 
-      // Only report activity for an active working session.
       if (punchStatus !== "in") return;
+      if (!employeeId || !authToken) return;
 
-      const idleSession = isCurrentlyIdleRef.current || showIdleModal;
-
-      if (!idleSession || !employeeId || !authToken) return;
+      // Prevent too many API requests.
       if (activityReportInProgressRef.current) return;
-      if (now - lastActivityReportTimeRef.current < 1500) return;
+      if (now - lastActivityReportTimeRef.current < 10000) return;
 
       lastActivityReportTimeRef.current = now;
       activityReportInProgressRef.current = true;
 
       try {
-        const res = await apiCall("/work-session/report-idle", "POST", {
+        // Report confirmed human input, even when currently Working.
+        const res = await apiCall("/work-session/heartbeat", "POST", {
           employeeId,
           activityType: "human",
         });
 
         if (!mounted || !res?.success) return;
 
-        // Resume only after backend confirmation.
-        isCurrentlyIdleRef.current = false;
-        setIsCurrentlyIdle(false);
-        setShowIdleModal(false);
+        if (res.data?.status === "working") {
+          isCurrentlyIdleRef.current = false;
+          setIsCurrentlyIdle(false);
+          setShowIdleModal(false);
+        }
 
         if (res.data?.totalWorkSeconds !== undefined) {
           setWorkingSeconds(Number(res.data.totalWorkSeconds));
@@ -456,9 +489,11 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           );
         }
 
-        broadcastSync("STATE_UPDATED", { status: "working" });
+        broadcastSync("STATE_UPDATED", {
+          status: res.data?.status,
+        });
       } catch (err) {
-        console.warn("Activity report error:", err.message);
+        console.warn("Human activity report error:", err.message);
       } finally {
         activityReportInProgressRef.current = false;
       }
@@ -549,8 +584,6 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       if (activeSeparateCard && scheduledBreakRunning) {
         setScheduledBreakElapsed((prev) => prev + 1);
         setScheduledBreakRemaining((prev) => Math.max(0, prev - 1));
-        // Add to delay time every second during lunch/tea break
-
         if (activeSeparateCard === "lunch") {
           setLunchTakenSec((prev) => {
             const next = prev + 1;
@@ -580,7 +613,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       if (punchStatus === "in" && activeSeparateCard === null) {
         const idleForSec = (Date.now() - lastActivityTimeRef.current) / 1000;
 
-        if (idleForSec > 60) {
+        if (idleForSec >= 120) {
           // Enter idle once. Do not let this timer auto-resume the session.
           if (!isCurrentlyIdleRef.current) {
             isCurrentlyIdleRef.current = true;
@@ -641,7 +674,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           (Date.now() - lastActivityTimeRef.current) / 1000;
         await apiCall("/work-session/heartbeat", "POST", {
           employeeId,
-          isIdle: currentActiveSec > 60,
+          isIdle: currentActiveSec >= 120,
           activityType: "heartbeat",
         });
       } catch (_) {}
