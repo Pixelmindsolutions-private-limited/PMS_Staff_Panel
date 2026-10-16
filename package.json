@@ -66,6 +66,7 @@
     "tailwindcss": "^3.4.17"
   },
   "build": {
+    "extends": null,
     "appId": "com.pixelmind.pmsstaff",
     "productName": "PMS Staff Widget",
     "directories": {
