@@ -508,6 +508,11 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       "wheel",
       "touchstart",
       "pointerdown",
+      "mousemove",
+      "mouseup",
+      "auxclick",
+      "contextmenu",
+      "pointerup",
     ];
 
     events.forEach((eventName) => {
