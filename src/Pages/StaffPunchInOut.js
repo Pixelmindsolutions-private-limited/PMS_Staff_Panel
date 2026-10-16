@@ -1337,7 +1337,7 @@ const StaffPunchInOut = () => {
     { icon:<FiClock className="text-teal-500"/>, label:'Total Hours', val:`${workStats.totalHours}h`, bg:'bg-teal-50', border:'border-teal-100' },
     { icon:<FiUser className="text-green-600"/>, label:'Effective Hrs', val:`${workStats.effectiveHours}h`, bg:'bg-green-50', border:'border-green-100' },
     { icon:<FiAlertCircle className="text-red-600"/>, label:'Idle Time', val:`${Math.floor(workStats.idleTime)}m`, bg:'bg-red-50', border:'border-red-200' },
-    { icon:<FiCoffee className="text-amber-600"/>, label:'Tea Breaks', val:workStats.teaBreakCount, bg:'bg-amber-50', border:'border-amber-200' },
+    { icon:<FiCoffee className="text-amber-500"/>, label:'Tea Breaks', val:workStats.teaBreakCount, bg:'bg-amber-50', border:'border-amber-200' },
     { icon:<FiSun className="text-orange-600"/>, label:'Lunch Breaks', val:workStats.lunchBreakCount, bg:'bg-orange-50', border:'border-orange-200' },
     { icon:<FiZap className="text-teal-500"/>, label:'Efficiency', val:`${efficiency}%`, bg:'bg-teal-50', border:'border-teal-100' },
   ];
