@@ -125,6 +125,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   };
 
   // Dynamically adapt Electron window height based on current card view
+  // Dynamically adapt Electron window height based on current card view
   useEffect(() => {
     if (typeof window !== "undefined" && window.electronAPI?.setHeight) {
       if (isCardMinimized) {
@@ -135,12 +136,12 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         activeSeparateCard === "lunch" ||
         activeSeparateCard === "tea"
       ) {
-        // Extra height for the "Finished" banner so the Finish button
-        // does not scroll out of the fixed-height Electron window.
         const showFinishedBanner =
           (activeSeparateCard === "lunch" && showLunchFinished) ||
           (activeSeparateCard === "tea" && showTeaFinished);
-        window.electronAPI.setHeight(showFinishedBanner ? 460 : 380);
+
+        // Height badha kar 550 kar diya taaki button cut na ho
+        window.electronAPI.setHeight(showFinishedBanner ? 550 : 420);
       } else {
         window.electronAPI.setHeight(385);
       }
@@ -167,10 +168,10 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   // These are the source of truth for break timing. All break display
   // values are derived from these on every tick and on every resume event.
   const scheduledBreakStartMsRef = useRef(null); // Date.now() of break start
-  const scheduledBreakEndMsRef = useRef(null);   // expectedEndTime in ms
-  const manualBreakStartMsRef = useRef(null);    // personal/meeting start
-  const manualBreakEndMsRef = useRef(null);      // personal/meeting end
-  const finishedNoticeShownRef = useRef(false);  // guard duplicate toasts
+  const scheduledBreakEndMsRef = useRef(null); // expectedEndTime in ms
+  const manualBreakStartMsRef = useRef(null); // personal/meeting start
+  const manualBreakEndMsRef = useRef(null); // personal/meeting end
+  const finishedNoticeShownRef = useRef(false); // guard duplicate toasts
 
   // ===== NEW: guard so we never fire two /end-break requests at once =====
   const finishingBreakRef = useRef(false);
@@ -782,7 +783,12 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [punchStatus, activeSeparateCard, scheduledBreakRunning, recalcBreakTimers]);
+  }, [
+    punchStatus,
+    activeSeparateCard,
+    scheduledBreakRunning,
+    recalcBreakTimers,
+  ]);
 
   // ===== NEW: recompute on resume from sleep / screen-off / visibility / focus =====
   useEffect(() => {
@@ -1406,9 +1412,10 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       {/* ============================================================== */}
       {/* 🍱 SEPARATE CARD 1: ACTIVE LUNCH BREAK (1:00 PM - 1:45 PM)     */}
       {/* ============================================================== */}
-      {activeSeparateCard === "lunch" && (
+      {activeSeparateCard === "tea" && (
         <div
-          className="bg-white rounded-3xl border border-amber-200 shadow-2xl p-3.5 sm:p-4 max-w-[650px] w-full mx-auto relative overflow-hidden animate-slide-in font-sans"
+          // Yaha bhi overflow-y-auto kar dein
+          className="bg-white rounded-3xl border border-teal-200 shadow-2xl p-3.5 sm:p-4 max-w-[650px] w-full mx-auto relative overflow-y-auto animate-slide-in font-sans"
           style={{ backgroundColor: "#ffffff" }}
         >
           {/* Draggable header bar */}
