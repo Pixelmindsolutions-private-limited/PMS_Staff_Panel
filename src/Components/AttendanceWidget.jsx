@@ -1088,8 +1088,6 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       );
 
       // ===== Open the End Work popup after finishing the break =====
-      setShowEndConfirm(true);
-
       if (apiFailed) {
         console.warn(
           "end-break API reported no active break — UI advanced locally:",
@@ -1105,7 +1103,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       setIsFinishingBreak(false);
     }
   };
-
+ 
   // Manual generic break (Personal Break, Meeting, etc.)
   const handleStartManualBreak = async () => {
     setIsLoading(true);
@@ -1263,8 +1261,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         console.warn("Post-break refresh failed:", e?.message),
       );
 
-      // Open the End Work popup after finishing a manual break too
-      setShowEndConfirm(true);
+
 
       if (apiFailed) {
         console.warn(
