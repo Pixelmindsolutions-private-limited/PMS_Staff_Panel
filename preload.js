@@ -1,25 +1,34 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld('electronAPI', {
+contextBridge.exposeInMainWorld("electronAPI", {
   isElectron: true,
-  minimize: () => ipcRenderer.send('window-minimize'),
-  maximize: () => ipcRenderer.send('window-maximize'),
-  close: () => ipcRenderer.send('window-close'),
-  toggleSize: () => ipcRenderer.send('window-toggle-size'),
-  setHeight: (height) => ipcRenderer.send('window-set-height', height),
-  onAuthSync: (callback) => ipcRenderer.on('auth-sync', (_event, value) => callback(value)),
+  minimize: () => ipcRenderer.send("window-minimize"),
+  maximize: () => ipcRenderer.send("window-maximize"),
+  close: () => ipcRenderer.send("window-close"),
+  toggleSize: () => ipcRenderer.send("window-toggle-size"),
+  setHeight: (height) => ipcRenderer.send("window-set-height", height),
+  onAuthSync: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+
+    ipcRenderer.on("auth-sync", listener);
+
+    return () => {
+      ipcRenderer.removeListener("auth-sync", listener);
+    };
+  },
   onGlobalKeyboardActivity: (callback) => {
     const listener = () => callback();
-    ipcRenderer.on('global-keyboard-activity', listener);
-    return () => ipcRenderer.removeListener('global-keyboard-activity', listener);
+    ipcRenderer.on("global-keyboard-activity", listener);
+    return () =>
+      ipcRenderer.removeListener("global-keyboard-activity", listener);
   },
   onGlobalMouseActivity: (callback) => {
-  const listener = () => callback();
-  ipcRenderer.on('global-mouse-activity', listener);
+    const listener = () => callback();
+    ipcRenderer.on("global-mouse-activity", listener);
 
-  return () => {
-    ipcRenderer.removeListener('global-mouse-activity', listener);
-  };
-},
-  getPersistedAuth: () => ipcRenderer.invoke('get-persisted-auth')
+    return () => {
+      ipcRenderer.removeListener("global-mouse-activity", listener);
+    };
+  },
+  getPersistedAuth: () => ipcRenderer.invoke("get-persisted-auth"),
 });

@@ -135,12 +135,23 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         activeSeparateCard === "lunch" ||
         activeSeparateCard === "tea"
       ) {
-        window.electronAPI.setHeight(360);
+        // Extra height for the "Finished" banner so the Finish button
+        // does not scroll out of the fixed-height Electron window.
+        const showFinishedBanner =
+          (activeSeparateCard === "lunch" && showLunchFinished) ||
+          (activeSeparateCard === "tea" && showTeaFinished);
+        window.electronAPI.setHeight(showFinishedBanner ? 460 : 380);
       } else {
         window.electronAPI.setHeight(385);
       }
     }
-  }, [punchStatus, isCardMinimized, activeSeparateCard]);
+  }, [
+    punchStatus,
+    isCardMinimized,
+    activeSeparateCard,
+    showLunchFinished,
+    showTeaFinished,
+  ]);
 
   // Refs for tracking activity & sync
   const lastActivityTimeRef = useRef(Date.now());
@@ -151,6 +162,19 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   const isCurrentlyIdleRef = useRef(false);
   const activityReportInProgressRef = useRef(false);
   const statusRefreshRequestRef = useRef(0);
+
+  // ===== NEW: absolute timestamp anchors for break timers =====
+  // These are the source of truth for break timing. All break display
+  // values are derived from these on every tick and on every resume event.
+  const scheduledBreakStartMsRef = useRef(null); // Date.now() of break start
+  const scheduledBreakEndMsRef = useRef(null);   // expectedEndTime in ms
+  const manualBreakStartMsRef = useRef(null);    // personal/meeting start
+  const manualBreakEndMsRef = useRef(null);      // personal/meeting end
+  const finishedNoticeShownRef = useRef(false);  // guard duplicate toasts
+
+  // ===== NEW: guard so we never fire two /end-break requests at once =====
+  const finishingBreakRef = useRef(false);
+  const [isFinishingBreak, setIsFinishingBreak] = useState(false);
 
   // Format helpers
   const formatSecToHMS = (totalSec) => {
@@ -240,6 +264,86 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     [apiCall],
   );
 
+  // ===== NEW: recompute all break display values from timestamps =====
+  // This is idempotent and safe to call many times per second. It reads
+  // absolute timestamps (anchored from the backend's startTime /
+  // expectedEndTime) so a paused or throttled setInterval, a sleeping
+  // laptop, or a minimized window can never make the timer drift.
+  const recalcBreakTimers = useCallback(() => {
+    const now = Date.now();
+
+    // --- Scheduled (lunch / tea) ---
+    if (
+      activeSeparateCard &&
+      scheduledBreakRunning &&
+      scheduledBreakStartMsRef.current != null &&
+      scheduledBreakEndMsRef.current != null
+    ) {
+      const startMs = scheduledBreakStartMsRef.current;
+      const endMs = scheduledBreakEndMsRef.current;
+      const elapsed = Math.max(0, Math.floor((now - startMs) / 1000));
+      const remaining = Math.max(0, Math.ceil((endMs - now) / 1000));
+
+      setScheduledBreakElapsed(elapsed);
+      setScheduledBreakRemaining(remaining);
+
+      const todayStr = new Date().toISOString().split("T")[0];
+      if (activeSeparateCard === "lunch") {
+        setLunchTakenSec(elapsed);
+        try {
+          localStorage.setItem(`pms_lunch_taken_${todayStr}`, String(elapsed));
+        } catch (_) {}
+      } else if (activeSeparateCard === "tea") {
+        setTeaTakenSec(elapsed);
+        try {
+          localStorage.setItem(`pms_tea_taken_${todayStr}`, String(elapsed));
+        } catch (_) {}
+      }
+
+      // One-shot completion notice per break instance
+      if (remaining === 0 && !finishedNoticeShownRef.current) {
+        finishedNoticeShownRef.current = true;
+        if (activeSeparateCard === "lunch") setShowLunchFinished(true);
+        if (activeSeparateCard === "tea") setShowTeaFinished(true);
+      }
+      // If the server later extends the break, re-arm the notice
+      if (remaining > 0) finishedNoticeShownRef.current = false;
+      return;
+    }
+
+    // --- Manual (personal / meeting) ---
+    if (
+      punchStatus === "break" &&
+      !activeSeparateCard &&
+      manualBreakStartMsRef.current != null &&
+      manualBreakEndMsRef.current != null
+    ) {
+      const startMs = manualBreakStartMsRef.current;
+      const endMs = manualBreakEndMsRef.current;
+      const elapsed = Math.max(0, Math.floor((now - startMs) / 1000));
+      const remaining = Math.max(0, Math.ceil((endMs - now) / 1000));
+
+      setBreakRemainingSec(remaining);
+
+      setCustomBreaksList((prev) => {
+        if (!prev || prev.length === 0) return prev;
+        const idx = prev.findIndex((cb) => cb.status === "active");
+        if (idx === -1) return prev;
+        if (prev[idx].takenSec === elapsed) return prev; // no-op
+        const next = [...prev];
+        next[idx] = { ...next[idx], takenSec: elapsed };
+        try {
+          const todayStr = new Date().toISOString().split("T")[0];
+          localStorage.setItem(
+            `pms_custom_breaks_${todayStr}`,
+            JSON.stringify(next),
+          );
+        } catch (_) {}
+        return next;
+      });
+    }
+  }, [activeSeparateCard, scheduledBreakRunning, punchStatus]);
+
   // Check current server status
   const refreshStatus = useCallback(
     async (token, empId) => {
@@ -253,8 +357,6 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           token,
         );
         if (res.success && res.data) {
-          // Broadcast refreshes can overlap. Ignore an older response so it
-          // cannot roll the live counters back after a newer server snapshot.
           if (requestId !== statusRefreshRequestRef.current) return;
           const status = String(res.data.status || "").toLowerCase();
           // Delay should contain only actual idle time.
@@ -378,26 +480,55 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                   const scheduledType = breakType.includes("lunch")
                     ? "lunch"
                     : "tea";
+                  // ===== NEW: seed absolute anchors from backend =====
+                  const startMs = currentBreak.startTime
+                    ? new Date(currentBreak.startTime).getTime()
+                    : Date.now();
+                  const endMs = currentBreak.expectedEndTime
+                    ? new Date(currentBreak.expectedEndTime).getTime()
+                    : startMs +
+                      (scheduledType === "lunch" ? 45 : 15) * 60 * 1000;
+
+                  scheduledBreakStartMsRef.current = startMs;
+                  scheduledBreakEndMsRef.current = endMs;
+                  finishedNoticeShownRef.current = false;
+
                   setActiveSeparateCard(scheduledType);
                   setScheduledBreakRunning(true);
-                  if (currentBreak.expectedEndTime) {
-                    const remaining = Math.max(
-                      0,
-                      Math.floor(
-                        (new Date(currentBreak.expectedEndTime).getTime() -
-                          Date.now()) /
-                          1000,
-                      ),
-                    );
-                    setScheduledBreakRemaining(remaining);
-                    setScheduledBreakElapsed(
-                      Math.max(
-                        0,
-                        (scheduledType === "lunch" ? 45 * 60 : 15 * 60) -
-                          remaining,
-                      ),
-                    );
+
+                  const elapsed = Math.max(
+                    0,
+                    Math.floor((Date.now() - startMs) / 1000),
+                  );
+                  const remaining = Math.max(
+                    0,
+                    Math.ceil((endMs - Date.now()) / 1000),
+                  );
+                  setScheduledBreakElapsed(elapsed);
+                  setScheduledBreakRemaining(remaining);
+                  if (scheduledType === "lunch") setLunchTakenSec(elapsed);
+                  else setTeaTakenSec(elapsed);
+
+                  // Break expired while widget was closed/asleep: surface
+                  // the notice once instead of silently ticking.
+                  if (remaining === 0 && !finishedNoticeShownRef.current) {
+                    finishedNoticeShownRef.current = true;
+                    if (scheduledType === "lunch") setShowLunchFinished(true);
+                    else setShowTeaFinished(true);
                   }
+                } else {
+                  // ===== NEW: manual break restored from backend =====
+                  const startMs = currentBreak.startTime
+                    ? new Date(currentBreak.startTime).getTime()
+                    : Date.now();
+                  const endMs = currentBreak.expectedEndTime
+                    ? new Date(currentBreak.expectedEndTime).getTime()
+                    : startMs + (currentBreak.duration || 15) * 60 * 1000;
+                  manualBreakStartMsRef.current = startMs;
+                  manualBreakEndMsRef.current = endMs;
+                  setBreakRemainingSec(
+                    Math.max(0, Math.ceil((endMs - Date.now()) / 1000)),
+                  );
                 }
               }
               checkBreakDetails(token, empId);
@@ -416,9 +547,51 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     [apiCall, checkBreakDetails],
   );
 
+  useEffect(() => {
+    const removeAuthSync = window.electronAPI?.onAuthSync?.(async (payload) => {
+      if (!payload?.token || !payload?.user) {
+        console.warn("Invalid login-sync payload");
+        return;
+      }
+
+      const user = payload.user;
+
+      console.log("New login employee:", user.employeeId, user.employeeName);
+
+      const newDetails = {
+        token: payload.token,
+        user,
+      };
+
+      try {
+        sessionStorage.setItem("staffDetails", JSON.stringify(newDetails));
+        localStorage.setItem("staffDetails", JSON.stringify(newDetails));
+      } catch (error) {
+        console.error("Unable to save staff details:", error);
+      }
+
+      setStaffDetails(user);
+      setEmployeeId(user.employeeId || "");
+      setAuthToken(payload.token);
+
+      await refreshStatus(payload.token, user.employeeId);
+    });
+
+    return () => {
+      if (typeof removeAuthSync === "function") {
+        removeAuthSync();
+      }
+    };
+  }, [refreshStatus]);
+
   // Mount setup
   useEffect(() => {
     const details = getStoredStaffDetails();
+    console.log(
+      "Stored employee:",
+      details?.user?.employeeId,
+      details?.user?.employeeName,
+    );
     if (details) {
       setStaffDetails(details.user);
       setEmployeeId(details.user.employeeId);
@@ -585,34 +758,10 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         }
       }
 
-      // If Active Scheduled Break is Running:
-      if (activeSeparateCard && scheduledBreakRunning) {
-        setScheduledBreakElapsed((prev) => prev + 1);
-        setScheduledBreakRemaining((prev) => Math.max(0, prev - 1));
-        if (activeSeparateCard === "lunch") {
-          setLunchTakenSec((prev) => {
-            const next = prev + 1;
-            try {
-              localStorage.setItem(`pms_lunch_taken_${todayStr}`, String(next));
-            } catch (_) {}
-            return next;
-          });
-        } else if (activeSeparateCard === "tea") {
-          setTeaTakenSec((prev) => {
-            const next = prev + 1;
-            try {
-              localStorage.setItem(`pms_tea_taken_${todayStr}`, String(next));
-            } catch (_) {}
-            return next;
-          });
-        }
-
-        // Check if scheduled break duration finished
-        if (scheduledBreakRemaining <= 1) {
-          if (activeSeparateCard === "lunch") setShowLunchFinished(true);
-          if (activeSeparateCard === "tea") setShowTeaFinished(true);
-        }
-      }
+      // ===== NEW: always recompute break timers from timestamps =====
+      // Do NOT increment counter state. setInterval may fire zero or one
+      // times across a sleep; only absolute timestamps are reliable.
+      recalcBreakTimers();
 
       // If working normally (not on scheduled break card):
       if (punchStatus === "in" && activeSeparateCard === null) {
@@ -630,40 +779,44 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           setWorkingSeconds((prev) => prev + 1);
         }
       }
-
-      // If on standard manual break:
-      if (punchStatus === "break" && activeSeparateCard === null) {
-        if (breakInfo?.expectedEndTime) {
-          const rem = Math.floor(
-            (new Date(breakInfo.expectedEndTime).getTime() - Date.now()) / 1000,
-          );
-          setBreakRemainingSec(Math.max(0, rem));
-        }
-        setCustomBreaksList((prev) => {
-          if (!prev || prev.length === 0) return prev;
-          const updated = [...prev];
-          const lastIdx = updated.length - 1;
-          if (updated[lastIdx]?.status === "active") {
-            updated[lastIdx] = {
-              ...updated[lastIdx],
-              takenSec: (updated[lastIdx].takenSec || 0) + 1,
-            };
-            return updated;
-          }
-          return prev;
-        });
-      }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [
-    punchStatus,
-    activeSeparateCard,
-    scheduledBreakRunning,
-    scheduledBreakRemaining,
-    breakInfo,
-    showIdleModal,
-  ]);
+  }, [punchStatus, activeSeparateCard, scheduledBreakRunning, recalcBreakTimers]);
+
+  // ===== NEW: recompute on resume from sleep / screen-off / visibility / focus =====
+  useEffect(() => {
+    const onResume = () => {
+      // Recompute locally first so the UI is correct instantly, then re-sync
+      // with the backend (source of truth) to restore any changes made while
+      // this window was asleep.
+      recalcBreakTimers();
+      const details = getStoredStaffDetails();
+      if (details?.token && details?.user?.employeeId) {
+        refreshStatus(details.token, details.user.employeeId);
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") onResume();
+    };
+
+    window.addEventListener("focus", onResume);
+    window.addEventListener("online", onResume);
+    window.addEventListener("pageshow", onResume);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    // Optional Electron power-resume hook (if preload exposes it)
+    const removePowerResume = window.electronAPI?.onPowerResume?.(onResume);
+
+    return () => {
+      window.removeEventListener("focus", onResume);
+      window.removeEventListener("online", onResume);
+      window.removeEventListener("pageshow", onResume);
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (typeof removePowerResume === "function") removePowerResume();
+    };
+  }, [recalcBreakTimers, refreshStatus]);
 
   // Periodic Heartbeat to Server (every 30s)
   useEffect(() => {
@@ -770,7 +923,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     setIsLoading(true);
     setError("");
     try {
-      await apiCall("/work-session/break", "POST", {
+      const res = await apiCall("/work-session/break", "POST", {
         employeeId,
         type,
         breakType: type,
@@ -778,76 +931,143 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         durationMinutes: durationMin,
         reason: type,
       });
+
+      // ===== NEW: anchor to backend timestamps =====
+      const br = res?.data?.currentBreak || res?.data?.break || null;
+      const startMs = br?.startTime
+        ? new Date(br.startTime).getTime()
+        : Date.now();
+      const endMs = br?.expectedEndTime
+        ? new Date(br.expectedEndTime).getTime()
+        : startMs + durationMin * 60 * 1000;
+
+      scheduledBreakStartMsRef.current = startMs;
+      scheduledBreakEndMsRef.current = endMs;
+      finishedNoticeShownRef.current = false;
+
       setScheduledBreakRunning(true);
-      setScheduledBreakRemaining(durationMin * 60);
-      setScheduledBreakElapsed(0);
+      setScheduledBreakRemaining(
+        Math.max(0, Math.ceil((endMs - Date.now()) / 1000)),
+      );
+      setScheduledBreakElapsed(
+        Math.max(0, Math.floor((Date.now() - startMs) / 1000)),
+      );
       setPunchStatus("break");
       broadcastSync("STATE_UPDATED", { status: "on_break", type });
     } catch (err) {
       setError(err.message || `Unable to start ${type} break`);
+      // Local fallback: anchor to now (server was unreachable).
+      const startMs = Date.now();
+      const endMs = startMs + durationMin * 60 * 1000;
+      scheduledBreakStartMsRef.current = startMs;
+      scheduledBreakEndMsRef.current = endMs;
+      finishedNoticeShownRef.current = false;
       setScheduledBreakRunning(true);
       setScheduledBreakRemaining(durationMin * 60);
+      setScheduledBreakElapsed(0);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Finish Scheduled Break and Resume Work
-
+  // Finish Scheduled Break and Resume Work (Lunch / Tea)
   const handleFinishScheduledBreak = async () => {
-    if (isLoading) return;
-
-    setIsLoading(true);
+    // Prevent duplicate /end-break calls
+    if (finishingBreakRef.current) return;
+    finishingBreakRef.current = true;
+    setIsFinishingBreak(true);
     setError("");
 
     const todayStr = new Date().toISOString().split("T")[0];
     const breakType = activeSeparateCard;
 
     try {
-      const res = await apiCall("/work-session/end-break", "POST", {
-        employeeId,
-      });
+      let res = null;
+      let apiFailed = false;
+      let apiErrorMessage = "";
 
-      const actualBreak = res?.data?.break;
+      try {
+        res = await apiCall("/work-session/end-break", "POST", {
+          employeeId,
+        });
+      } catch (err) {
+        apiFailed = true;
+        apiErrorMessage = err?.message || "";
 
-      if (!actualBreak) {
-        throw new Error("Break ended, but actual duration was not returned.");
+        // If the backend already auto-ended the break (scheduled expiry
+        // handled server-side), this is not an error — proceed with the
+        // local reset so the UI can move on.
+        const lower = apiErrorMessage.toLowerCase();
+        const looksLikeNoActiveBreak =
+          lower.includes("no active break") ||
+          lower.includes("break not found") ||
+          lower.includes("no break") ||
+          lower.includes("already ended") ||
+          lower.includes("not currently on break");
+
+        if (!looksLikeNoActiveBreak) {
+          throw err;
+        }
       }
 
-      const actualSeconds = Math.max(
-        0,
-        Number(
-          actualBreak.durationSeconds ??
-            Math.round(Number(actualBreak.duration || 0) * 60),
-        ),
-      );
+      // Accept any response shape the backend uses
+      const actualBreak =
+        res?.data?.break ||
+        res?.data?.endedBreak ||
+        res?.data?.currentBreak ||
+        res?.break ||
+        null;
 
-      console.log("Actual completed break:", {
-        type: actualBreak.type,
-        startTime: actualBreak.startTime,
-        endTime: actualBreak.endTime,
-        durationSeconds: actualSeconds,
-        durationFormatted: formatSecToMS(actualSeconds),
-      });
+      // Compute actual seconds — prefer backend truth, else derive from anchors
+      let actualSeconds = 0;
+      if (actualBreak) {
+        actualSeconds = Math.max(
+          0,
+          Number(
+            actualBreak.durationSeconds ??
+              Math.round(Number(actualBreak.duration || 0) * 60),
+          ),
+        );
+      } else if (scheduledBreakStartMsRef.current != null) {
+        actualSeconds = Math.max(
+          0,
+          Math.floor((Date.now() - scheduledBreakStartMsRef.current) / 1000),
+        );
+      }
 
-      // Stop the live timer. Do not add elapsed time again:
-      // refreshStatus will restore the saved totals from the backend.
+      // Clear timestamp anchors
+      scheduledBreakStartMsRef.current = null;
+      scheduledBreakEndMsRef.current = null;
+      finishedNoticeShownRef.current = false;
+
+      // Reset break UI state
       setScheduledBreakRunning(false);
       setScheduledBreakElapsed(actualSeconds);
       setScheduledBreakRemaining(0);
-
-      if (breakType === "lunch") {
-        localStorage.setItem(`pms_lunch_done_${todayStr}`, "1");
-      }
-
-      if (breakType === "tea") {
-        localStorage.setItem(`pms_tea_done_${todayStr}`, "1");
-      }
-
       setActiveSeparateCard(null);
       setShowLunchFinished(false);
       setShowTeaFinished(false);
       setPunchStatus("in");
+
+      // Mark this break as done for today
+      if (breakType === "lunch") {
+        localStorage.setItem(`pms_lunch_done_${todayStr}`, "1");
+        try {
+          localStorage.setItem(
+            `pms_lunch_taken_${todayStr}`,
+            String(actualSeconds),
+          );
+        } catch (_) {}
+      }
+      if (breakType === "tea") {
+        localStorage.setItem(`pms_tea_done_${todayStr}`, "1");
+        try {
+          localStorage.setItem(
+            `pms_tea_taken_${todayStr}`,
+            String(actualSeconds),
+          );
+        } catch (_) {}
+      }
 
       isCurrentlyIdleRef.current = false;
       setIsCurrentlyIdle(false);
@@ -856,12 +1076,27 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
       broadcastSync("STATE_UPDATED", { status: "working" });
 
-      // Backend's saved break records are the source of truth.
-      await refreshStatus(authToken, employeeId);
+      // Best-effort re-sync
+      refreshStatus(authToken, employeeId).catch((e) =>
+        console.warn("Post-break refresh failed:", e?.message),
+      );
+
+      // ===== Open the End Work popup after finishing the break =====
+      setShowEndConfirm(true);
+
+      if (apiFailed) {
+        console.warn(
+          "end-break API reported no active break — UI advanced locally:",
+          apiErrorMessage,
+        );
+      }
     } catch (err) {
-      setError(err.message || "Unable to finish break");
+      console.error("Finish break API failed:", err);
+      setError(err?.message || "Unable to finish break. Check connection.");
+      // The break card stays visible so the user can retry.
     } finally {
-      setIsLoading(false);
+      finishingBreakRef.current = false;
+      setIsFinishingBreak(false);
     }
   };
 
@@ -881,10 +1116,22 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         durationMinutes: breakDuration,
         reason: normalizedType,
       });
+
+      // ===== NEW: anchor to backend timestamps =====
+      const br = res?.data?.currentBreak || res?.data?.break || null;
+      const startMs = br?.startTime
+        ? new Date(br.startTime).getTime()
+        : Date.now();
+      const endMs = br?.expectedEndTime
+        ? new Date(br.expectedEndTime).getTime()
+        : startMs + breakDuration * 60 * 1000;
+
+      manualBreakStartMsRef.current = startMs;
+      manualBreakEndMsRef.current = endMs;
+
       setPunchStatus("break");
-      setBreakRemainingSec(breakDuration * 60);
-      if (res?.data?.currentBreak) setBreakInfo(res.data.currentBreak);
-      else if (res?.data?.break) setBreakInfo(res.data.break);
+      setBreakRemainingSec(Math.max(0, Math.ceil((endMs - Date.now()) / 1000)));
+      if (br) setBreakInfo(br);
 
       const todayStr = new Date().toISOString().split("T")[0];
       const newCustomBreak = {
@@ -892,9 +1139,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         type: normalizedType,
         reason: breakReason,
         duration: breakDuration,
-        takenSec: 0,
+        takenSec: Math.max(0, Math.floor((Date.now() - startMs) / 1000)),
         status: "active",
-        startTime: new Date().toISOString(),
+        startTime: new Date(startMs).toISOString(),
         endTime: null,
       };
       setCustomBreaksList((prev) => {
@@ -920,36 +1167,53 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   };
 
   const handleResumeManualBreak = async () => {
-    if (isLoading) return;
-
-    setIsLoading(true);
+    if (finishingBreakRef.current) return;
+    finishingBreakRef.current = true;
+    setIsFinishingBreak(true);
     setError("");
 
     try {
-      const res = await apiCall("/work-session/end-break", "POST", {
-        employeeId,
-      });
+      let res = null;
+      let apiFailed = false;
+      let apiErrorMessage = "";
 
-      const actualBreak = res?.data?.break;
-
-      if (!actualBreak) {
-        throw new Error("Break ended, but actual duration was not returned.");
+      try {
+        res = await apiCall("/work-session/end-break", "POST", { employeeId });
+      } catch (err) {
+        apiFailed = true;
+        apiErrorMessage = err?.message || "";
+        const lower = apiErrorMessage.toLowerCase();
+        const looksLikeNoActiveBreak =
+          lower.includes("no active break") ||
+          lower.includes("break not found") ||
+          lower.includes("no break") ||
+          lower.includes("already ended") ||
+          lower.includes("not currently on break");
+        if (!looksLikeNoActiveBreak) throw err;
       }
 
-      const actualSeconds = Math.max(
-        0,
-        Number(
-          actualBreak.durationSeconds ??
-            Math.round(Number(actualBreak.duration || 0) * 60),
-        ),
-      );
+      const actualBreak =
+        res?.data?.break ||
+        res?.data?.endedBreak ||
+        res?.data?.currentBreak ||
+        res?.break ||
+        null;
 
-      console.log("Actual manual break:", {
-        type: actualBreak.type,
-        duration: formatSecToMS(actualSeconds),
-        startTime: actualBreak.startTime,
-        endTime: actualBreak.endTime,
-      });
+      let actualSeconds = 0;
+      if (actualBreak) {
+        actualSeconds = Math.max(
+          0,
+          Number(
+            actualBreak.durationSeconds ??
+              Math.round(Number(actualBreak.duration || 0) * 60),
+          ),
+        );
+      } else if (manualBreakStartMsRef.current != null) {
+        actualSeconds = Math.max(
+          0,
+          Math.floor((Date.now() - manualBreakStartMsRef.current) / 1000),
+        );
+      }
 
       const todayStr = new Date().toISOString().split("T")[0];
 
@@ -959,23 +1223,24 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             ? {
                 ...item,
                 status: "ended",
-                startTime: actualBreak.startTime || item.startTime,
-                endTime: actualBreak.endTime,
-                duration: actualBreak.duration,
+                startTime: actualBreak?.startTime || item.startTime,
+                endTime: actualBreak?.endTime || new Date().toISOString(),
+                duration: actualBreak?.duration,
                 takenSec: actualSeconds,
               }
             : item,
         );
-
         try {
           localStorage.setItem(
             `pms_custom_breaks_${todayStr}`,
             JSON.stringify(next),
           );
         } catch (_) {}
-
         return next;
       });
+
+      manualBreakStartMsRef.current = null;
+      manualBreakEndMsRef.current = null;
 
       setPunchStatus("in");
       setBreakInfo(null);
@@ -988,11 +1253,25 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
       broadcastSync("STATE_UPDATED", { status: "working" });
 
-      await refreshStatus(authToken, employeeId);
+      refreshStatus(authToken, employeeId).catch((e) =>
+        console.warn("Post-break refresh failed:", e?.message),
+      );
+
+      // Open the End Work popup after finishing a manual break too
+      setShowEndConfirm(true);
+
+      if (apiFailed) {
+        console.warn(
+          "Manual end-break API reported no active break — UI advanced locally:",
+          apiErrorMessage,
+        );
+      }
     } catch (err) {
-      setError(err.message || "Unable to resume work");
+      console.error("Resume manual break failed:", err);
+      setError(err?.message || "Unable to resume work");
     } finally {
-      setIsLoading(false);
+      finishingBreakRef.current = false;
+      setIsFinishingBreak(false);
     }
   };
 
@@ -1236,10 +1515,10 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
               <button
                 type="button"
                 onClick={handleFinishScheduledBreak}
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
+                disabled={isFinishingBreak}
+                className="w-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all disabled:opacity-60"
               >
-                {isLoading ? (
+                {isFinishingBreak ? (
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <FiCheckCircle />
@@ -1358,10 +1637,10 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
               <button
                 type="button"
                 onClick={handleFinishScheduledBreak}
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
+                disabled={isFinishingBreak}
+                className="w-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all disabled:opacity-60"
               >
-                {isLoading ? (
+                {isFinishingBreak ? (
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <FiCheckCircle />
@@ -1397,19 +1676,17 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                   }}
                 />
               </div>
+
               <div>
                 <h3 className="font-syne font-black text-[#0f2e2e] text-sm leading-tight tracking-tight">
                   Pixel Mind Solutions
                 </h3>
-                {staffDetails?.employeeName ? (
-                  <p className="text-[11px] text-slate-500 font-semibold truncate max-w-[180px]">
-                    {staffDetails.employeeName}
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-slate-500 font-semibold truncate max-w-[180px]">
-                    Kareem Unnisa
-                  </p>
-                )}
+
+                <p className="text-[11px] text-slate-500 font-semibold truncate max-w-[180px]">
+                  {staffDetails?.employeeName ||
+                    staffDetails?.name ||
+                    "Loading staff..."}
+                </p>
               </div>
             </div>
 
@@ -1581,7 +1858,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                                 <button
                                   type="button"
                                   onClick={handleFinishScheduledBreak}
-                                  disabled={isLoading}
+                                  disabled={isFinishingBreak}
                                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2 py-0.5 rounded-md transition-all shadow-2xs cursor-pointer flex items-center gap-0.5"
                                 >
                                   <FiPlay className="text-[8px]" /> Resume
@@ -1639,7 +1916,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                                 <button
                                   type="button"
                                   onClick={handleFinishScheduledBreak}
-                                  disabled={isLoading}
+                                  disabled={isFinishingBreak}
                                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2 py-0.5 rounded-md transition-all shadow-2xs cursor-pointer flex items-center gap-0.5"
                                 >
                                   <FiPlay className="text-[8px]" /> Resume
@@ -1709,7 +1986,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                                 <button
                                   type="button"
                                   onClick={handleResumeManualBreak}
-                                  disabled={isLoading}
+                                  disabled={isFinishingBreak}
                                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-2 py-0.5 rounded-md transition-all shadow-2xs cursor-pointer flex items-center gap-0.5"
                                 >
                                   <FiPlay className="text-[8px]" /> Resume
@@ -1886,10 +2163,10 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
               <button
                 type="button"
                 onClick={handleResumeManualBreak}
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-teal-500 to-teal-600 text-white py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
+                disabled={isFinishingBreak}
+                className="w-full bg-gradient-to-r from-teal-500 to-teal-600 text-white py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer disabled:opacity-60"
               >
-                {isLoading ? (
+                {isFinishingBreak ? (
                   <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <FiPlay />
