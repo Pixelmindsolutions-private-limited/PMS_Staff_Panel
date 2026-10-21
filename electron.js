@@ -254,17 +254,21 @@ async function createWindow() {
       await mainWindow.loadURL(`http://31.97.228.17:4477/punch-widget`);
     } catch (e) {
       console.error("Fallback server error:", e);
-      mainWindow.loadURL("http://31.97.228.17:4477/punch-widget").catch(() => {});
+      mainWindow
+        .loadURL("http://31.97.228.17:4477/punch-widget")
+        .catch(() => {});
     }
   } else {
-    mainWindow.loadURL("http://31.97.228.17:4477/punch-widget").catch(async () => {
-      try {
-        const port = await startFallbackServer();
-        await mainWindow.loadURL(`http://31.97.228.17:4477/punch-widget`);
-      } catch (e) {
-        console.error("Fallback server error:", e);
-      }
-    });
+    mainWindow
+      .loadURL("http://31.97.228.17:4477/punch-widget")
+      .catch(async () => {
+        try {
+          const port = await startFallbackServer();
+          await mainWindow.loadURL(`http://31.97.228.17:4477/punch-widget`);
+        } catch (e) {
+          console.error("Fallback server error:", e);
+        }
+      });
   }
 
   mainWindow.on("closed", () => {
@@ -373,6 +377,11 @@ if (!gotTheLock) {
   app.whenReady().then(() => {
     if (process.platform === "win32") {
       app.setAppUserModelId("com.pixelmind.pmsstaff");
+
+      app.setLoginItemSettings({
+        openAtLogin: true,
+        path: process.execPath,
+      });
     }
 
     try {

@@ -83,6 +83,7 @@
     "win": {
       "target": "nsis",
       "icon": "pms_logo.ico",
+      "signAndEditExecutable": false,
       "artifactName": "PMS-Staff-Widget-Setup-${version}.${ext}"
     },
     "nsis": {
