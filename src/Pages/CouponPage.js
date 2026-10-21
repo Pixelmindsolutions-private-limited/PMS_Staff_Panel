@@ -18,7 +18,7 @@ const CouponsTable = () => {
   useEffect(() => {
     const fetchCoupons = async () => {
       try {
-        const res = await axios.get("http://31.97.206.144:6098/api/admin/getallcoupons");
+        const res = await axios.get("https://pmsbackend.pixelmindsolutions.com/api/admin/getallcoupons");
         if (res.data && res.data.coupons) {
           setCoupons(res.data.coupons);
         }
@@ -35,7 +35,7 @@ const CouponsTable = () => {
     try {
       // Call PATCH API to update coupon status
       const res = await axios.put(
-        `http://31.97.206.144:6098/api/admin/updatecouponstatus/${id}`,
+        `https://pmsbackend.pixelmindsolutions.com/api/admin/updatecouponstatus/${id}`,
         { status: newStatus }
       );
       if (res.data && res.data.coupon) {
@@ -60,7 +60,7 @@ const CouponsTable = () => {
     if (!confirmed) return;
 
     try {
-      await axios.delete(`http://31.97.206.144:6098/api/admin/deletecoupon/${id}`);
+      await axios.delete(`https://pmsbackend.pixelmindsolutions.com/api/admin/deletecoupon/${id}`);
       // Remove from local state on success
       setCoupons((prev) => prev.filter((c) => c._id !== id));
       alert("Coupon deleted successfully.");

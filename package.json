@@ -40,6 +40,7 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
+    "electron": "electron .",
     "desktop:dist": "npm run build && electron-builder --win nsis"
   },
   "eslintConfig": {
@@ -61,7 +62,7 @@
     ]
   },
   "devDependencies": {
-    "electron": "^44.7.0",
+    "electron": "^44.9.3",
     "electron-builder": "^26.15.3",
     "tailwindcss": "^3.4.17"
   },

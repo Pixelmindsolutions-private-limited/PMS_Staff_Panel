@@ -1,12 +1,14 @@
 const { app, BrowserWindow, screen, ipcMain } = require("electron");
 const path = require("path");
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 
 let mainWindow = null;
 let fallbackServer = null;
 let isCompact = false;
 let keyboardActivityHook = null;
+let latestSyncRequest = 0;
 
 function focusWidgetWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -16,29 +18,46 @@ function focusWidgetWindow() {
 }
 
 function storeAndBroadcastAuth(payload) {
-  if (!payload?.token || !payload?.user) return;
+  const user = payload?.user;
+  if (!payload?.token || !user || !(user.employeeId || user._id)) return;
+  const normalized = {
+    token: payload.token,
+    user: { ...user, employeeName: user.employeeName || "" },
+    type: "staff",
+  };
   try {
-    fs.writeFileSync(
-      path.join(app.getPath("userData"), "persisted_auth.json"),
-      JSON.stringify(payload, null, 2),
-    );
+    const authPath = path.join(app.getPath("userData"), "persisted_auth.json");
+    const tempPath = `${authPath}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(normalized));
+    fs.renameSync(tempPath, authPath);
   } catch (error) {
     console.warn("Could not persist synced staff login:", error.message);
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("auth-sync", payload);
+    mainWindow.webContents.send("auth-sync", normalized);
     focusWidgetWindow();
   }
 }
 
 function handleWidgetProtocol(rawUrl) {
+  console.log("Electron received protocol URL:", rawUrl);
   try {
     const url = new URL(rawUrl);
     if (url.protocol !== "pms-widget:") return;
     if (url.hostname === "sync") {
       const syncId = url.pathname.replace(/^\/+/, "");
-      if (!/^[a-f0-9]{48}$/.test(syncId)) return;
-      const request = http.get(
+
+      console.log("Widget protocol received:", {
+        hostname: url.hostname,
+        syncIdLength: syncId.length,
+        syncIdValid: /^[a-f0-9]{48}$/.test(syncId),
+      });
+      if (!/^[a-f0-9]{48}$/.test(syncId)) {
+        console.error("Invalid widget sync ID");
+        return;
+      }
+      const requestVersion = ++latestSyncRequest;
+      const request = https.get(
         `https://pmsbackend.pixelmindsolutions.com/login-sync/pending/${syncId}`,
         (response) => {
           let body = "";
@@ -49,8 +68,26 @@ function handleWidgetProtocol(rawUrl) {
           response.on("end", () => {
             try {
               const result = JSON.parse(body);
-              if (response.statusCode === 200 && result.success) {
+
+              console.log("Pending sync response:", {
+                statusCode: response.statusCode,
+                success: result.success,
+                employeeId: result.data?.user?.employeeId,
+                employeeName: result.data?.user?.employeeName,
+              });
+
+              if (
+                requestVersion === latestSyncRequest &&
+                response.statusCode === 200 &&
+                result.success
+              ) {
                 storeAndBroadcastAuth(result.data);
+              } else {
+                console.error("Pending sync was not applied:", {
+                  statusCode: response.statusCode,
+                  success: result.success,
+                  isLatestRequest: requestVersion === latestSyncRequest,
+                });
               }
             } catch (error) {
               console.warn(
@@ -217,28 +254,23 @@ async function createWindow() {
       await mainWindow.loadURL(`http://31.97.228.17:4477/punch-widget`);
     } catch (e) {
       console.error("Fallback server error:", e);
-      mainWindow
-        .loadURL("http://31.97.228.17:4477/punch-widget")
-        .catch(() => {});
+      mainWindow.loadURL("http://31.97.228.17:4477/punch-widget").catch(() => {});
     }
   } else {
-    mainWindow
-      .loadURL("http://31.97.228.17:4477/punch-widget")
-      .catch(async () => {
-        try {
-          const port = await startFallbackServer();
-          mainWindow.loadURL(`http://31.97.228.17:4477/punch-widget`);
-        } catch (e) {
-          console.error("Fallback server error:", e);
-        }
-      });
+    mainWindow.loadURL("http://31.97.228.17:4477/punch-widget").catch(async () => {
+      try {
+        const port = await startFallbackServer();
+        await mainWindow.loadURL(`http://31.97.228.17:4477/punch-widget`);
+      } catch (e) {
+        console.error("Fallback server error:", e);
+      }
+    });
   }
 
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
 }
-
 
 // Single instance lock: prevent duplicate instances conflicting
 const gotTheLock = app.requestSingleInstanceLock();
@@ -277,16 +309,45 @@ if (!gotTheLock) {
     try {
       const p = path.join(app.getPath("userData"), "persisted_auth.json");
       if (fs.existsSync(p)) {
-        return JSON.parse(fs.readFileSync(p, "utf8"));
+        const payload = JSON.parse(fs.readFileSync(p, "utf8"));
+        if (
+          payload?.token &&
+          payload?.user &&
+          (payload.user.employeeId || payload.user._id)
+        ) {
+          const tokenParts = payload.token.split(".");
+          const claims =
+            tokenParts.length === 3
+              ? JSON.parse(
+                  Buffer.from(tokenParts[1], "base64url").toString("utf8"),
+                )
+              : null;
+          if (claims?.exp && claims.exp * 1000 > Date.now()) return payload;
+        }
+        fs.rmSync(p, { force: true });
       }
     } catch (_) {}
     return null;
   });
 
-  ipcMain.on("window-set-height", (event, height) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setSize(660, height);
+  ipcMain.on("window-toggle-size", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width: screenWidth } = primaryDisplay.workAreaSize;
+
+    if (!isCompact) {
+      mainWindow.setSize(660, 75);
+      mainWindow.setPosition(screenWidth - 685, 25);
+      isCompact = true;
+    } else {
+      mainWindow.setSize(660, 385);
+      mainWindow.setPosition(screenWidth - 685, 25);
+      isCompact = false;
     }
+
+    mainWindow.show();
+    mainWindow.focus();
   });
 
   ipcMain.on("window-toggle-size", () => {

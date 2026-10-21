@@ -34,7 +34,7 @@ const CreateCoupon = () => {
   useEffect(() => {
     const fetchVendors = async () => {
       try {
-        const res = await fetch("http://31.97.206.144:6098/api/admin/getvendors");
+        const res = await fetch("https://pmsbackend.pixelmindsolutions.com/api/admin/getvendors");
         const data = await res.json();
         if (res.ok) {
           setVendors(data.vendors);
@@ -53,7 +53,7 @@ const CreateCoupon = () => {
 
     const fetchCategories = async () => {
       try {
-        const res = await fetch("http://31.97.206.144:6098/api/admin/categories");
+        const res = await fetch("https://pmsbackend.pixelmindsolutions.com/api/admin/categories");
         const data = await res.json();
         if (res.ok && data.categories.length > 0) {
           setCategories(data.categories);

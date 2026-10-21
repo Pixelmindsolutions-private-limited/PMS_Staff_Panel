@@ -22,7 +22,7 @@ export default function VendorList() {
     setError("");
     try {
       const token = localStorage.getItem("adminToken");
-      const res = await fetch("http://31.97.206.144:6098/api/admin/getvendors", {
+      const res = await fetch("https://pmsbackend.pixelmindsolutions.com/api/admin/getvendors", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`Failed to fetch vendors: ${res.status}`);
@@ -102,7 +102,7 @@ export default function VendorList() {
     try {
       const token = localStorage.getItem("adminToken");
       const res = await fetch(
-        `http://31.97.206.144:6098/api/admin/updatevendor/${editedVendor._id}`,
+        `https://pmsbackend.pixelmindsolutions.com/api/admin/updatevendor/${editedVendor._id}`,
         {
           method: "PUT",
           headers: {
@@ -131,7 +131,7 @@ export default function VendorList() {
     try {
       const token = localStorage.getItem("adminToken");
       const res = await fetch(
-        `http://31.97.206.144:6098/api/admin/deletevendor/${vendorId}`,
+        `https://pmsbackend.pixelmindsolutions.com/api/admin/deletevendor/${vendorId}`,
         {
           method: "DELETE",
           headers: {

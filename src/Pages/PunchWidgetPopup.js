@@ -11,11 +11,11 @@ const PunchWidgetPopup = () => {
   const [loginError, setLoginError] = useState('');
 
   const checkAuth = useCallback(async () => {
-    let d = getStoredStaffDetails();
-    if (!d?.token && window.electronAPI?.getPersistedAuth) {
+    let d = null;
+    if (window.electronAPI?.getPersistedAuth) {
       try {
         const persisted = await window.electronAPI.getPersistedAuth();
-        if (persisted?.token && persisted?.user) {
+        if (persisted?.token && persisted?.user && (persisted.user.employeeId || persisted.user._id)) {
           const raw = JSON.stringify(persisted);
           localStorage.setItem('staffDetails', raw);
           sessionStorage.setItem('staffDetails', raw);
@@ -27,6 +27,7 @@ const PunchWidgetPopup = () => {
         }
       } catch (_) {}
     }
+    if (!window.electronAPI?.getPersistedAuth) d = getStoredStaffDetails();
 
     if (d?.token && d?.user) {
       setIsAuth(true);
@@ -46,9 +47,8 @@ const PunchWidgetPopup = () => {
 
     checkAuth();
 
-    if (window.electronAPI?.onAuthSync) {
-      window.electronAPI.onAuthSync((payload) => {
-        if (payload?.token && payload?.user) {
+    const removeAuthSync = window.electronAPI?.onAuthSync?.((payload) => {
+        if (payload?.token && payload?.user && (payload.user.employeeId || payload.user._id)) {
           const raw = JSON.stringify(payload);
           localStorage.setItem('staffDetails', raw);
           sessionStorage.setItem('staffDetails', raw);
@@ -60,9 +60,9 @@ const PunchWidgetPopup = () => {
           setIsAuth(true);
         }
       });
-    }
 
     return () => {
+      if (typeof removeAuthSync === 'function') removeAuthSync();
       document.documentElement.style.background = '';
       document.body.style.background = '';
       document.body.style.overflow = '';

@@ -14,7 +14,7 @@ const RedeemedCouponsList = () => {
   useEffect(() => {
     const fetchCoupons = async () => {
       try {
-        const response = await fetch('http://31.97.206.144:6098/api/admin/userredeemedcouponhistory');
+        const response = await fetch('https://pmsbackend.pixelmindsolutions.com/api/admin/userredeemedcouponhistory');
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }

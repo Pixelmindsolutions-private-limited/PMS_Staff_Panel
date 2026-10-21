@@ -756,40 +756,21 @@ const startAuthenticatedWorkSession = async ({ token }) => {
   }
 };
 
-const openDesktopWidget = (url = 'pms-widget://open') => {
-  try {
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = url;
-    document.body.appendChild(iframe);
-    setTimeout(() => iframe.remove(), 1500);
-  } catch (_) {}
-};
-
 const syncToDesktopWidget = async (payload) => {
   try {
-    const raw = JSON.stringify(payload);
-    localStorage.setItem('staffDetails', raw);
-    sessionStorage.setItem('staffDetails', raw);
-    openDesktopWidget();
-
-    for (let attempt = 0; attempt < 12; attempt += 1) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      try {
-        const response = await fetch('https://pmsbackend.pixelmindsolutions.com/login-sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: raw
-        });
-        if (!response.ok) continue;
-        const result = await response.json();
-        if (result.success && result.syncId) {
-          openDesktopWidget(`pms-widget://sync/${encodeURIComponent(result.syncId)}`);
-          return;
-        }
-      } catch (_) {}
-    }
-    console.warn('PMS Staff desktop widget did not respond. Make sure it is installed and allowed to open.');
+    const user = payload?.user;
+    if (!payload?.token || !user || !(user.employeeId || user._id)) return;
+    localStorage.setItem('staffDetails', JSON.stringify(payload));
+    const response = await fetch('https://pmsbackend.pixelmindsolutions.com/login-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success || !/^[a-f0-9]{48}$/.test(result.syncId || '')) return;
+    // Top-level navigation allows the OS protocol handler to receive the ID;
+    // hidden iframes are blocked by current browser external-protocol policies.
+    window.location.assign(`pms-widget://sync/${result.syncId}`);
   } catch (_) {}
 };
 

@@ -44,6 +44,22 @@ export const getStoredStaffDetails = () => {
   return null;
 };
 
+// Actual elapsed seconds for a break record. Prefers timestamps so time
+// beyond the scheduled limit is preserved; never trusts planned duration
+// when real timestamps or an anchor exist.
+const getBreakSeconds = (b, anchorStartMs = null) => {
+  const start = b?.startTime ? new Date(b.startTime).getTime() : null;
+  const end = b?.endTime ? new Date(b.endTime).getTime() : null;
+  if (start && end) return Math.max(0, Math.floor((end - start) / 1000));
+  if (b?.durationSeconds != null) return Math.max(0, Number(b.durationSeconds));
+  if (anchorStartMs != null)
+    return Math.max(0, Math.floor((Date.now() - anchorStartMs) / 1000));
+  if (start) return Math.max(0, Math.floor((Date.now() - start) / 1000));
+  if (b?.duration != null)
+    return Math.max(0, Math.round(Number(b.duration) * 60));
+  return 0;
+};
+
 const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   const [staffDetails, setStaffDetails] = useState(null);
   const [employeeId, setEmployeeId] = useState("");
@@ -118,13 +134,13 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   };
 
   const handleMaximizeOrToggle = () => {
-    if (typeof window !== "undefined" && window.electronAPI?.toggleSize) {
-      window.electronAPI.toggleSize();
+    if (isCardMinimized) {
+      setIsCardMinimized(false);
+    } else {
+      setIsCardMinimized(true);
     }
-    setIsCardMinimized((prev) => !prev);
   };
 
-  // Dynamically adapt Electron window height based on current card view
   // Dynamically adapt Electron window height based on current card view
   useEffect(() => {
     if (typeof window !== "undefined" && window.electronAPI?.setHeight) {
@@ -140,8 +156,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           (activeSeparateCard === "lunch" && showLunchFinished) ||
           (activeSeparateCard === "tea" && showTeaFinished);
 
-        // Height badha kar 550 kar diya taaki button cut na ho
-        window.electronAPI.setHeight(showFinishedBanner ? 550 : 420);
+        window.electronAPI.setHeight(showFinishedBanner ? 620 : 420);
       } else {
         window.electronAPI.setHeight(385);
       }
@@ -374,16 +389,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
             res.data.breaks.forEach((b, idx) => {
               const rawType = String(b.type || b.reason || "").toLowerCase();
-              const durationSec = b.duration
-                ? Math.round(b.duration * 60)
-                : b.startTime && b.endTime
-                  ? Math.max(
-                      0,
-                      Math.floor(
-                        (new Date(b.endTime) - new Date(b.startTime)) / 1000,
-                      ),
-                    )
-                  : 0;
+              const durationSec = getBreakSeconds(b);
 
               if (rawType.includes("lunch")) {
                 lunchSec += durationSec;
@@ -547,21 +553,48 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     },
     [apiCall, checkBreakDetails],
   );
+  // Sync active break from backend every 5 seconds
+  useEffect(() => {
+    if (!authToken || !employeeId) return;
 
+    const syncBreakStatus = () => {
+      refreshStatus(authToken, employeeId);
+    };
+
+    syncBreakStatus();
+
+    const intervalId = setInterval(syncBreakStatus, 5000);
+
+    return () => clearInterval(intervalId);
+  }, [authToken, employeeId, refreshStatus]);
   useEffect(() => {
     const removeAuthSync = window.electronAPI?.onAuthSync?.(async (payload) => {
-      if (!payload?.token || !payload?.user) {
+      const user = payload?.user;
+      const nextEmployeeId = user?.employeeId || user?._id;
+      if (!payload?.token || !user || !nextEmployeeId) {
         console.warn("Invalid login-sync payload");
         return;
       }
 
-      const user = payload.user;
-
-      console.log("New login employee:", user.employeeId, user.employeeName);
+      const switchingEmployee = employeeId && employeeId !== nextEmployeeId;
+      if (switchingEmployee) {
+        statusRefreshRequestRef.current += 1;
+        setPunchStatus("out");
+        setBreakInfo(null);
+        setWorkingSeconds(0);
+        setDelaySeconds(0);
+        setIsCurrentlyIdle(false);
+        isCurrentlyIdleRef.current = false;
+      }
 
       const newDetails = {
         token: payload.token,
-        user,
+        user: {
+          ...user,
+          employeeId: user.employeeId || nextEmployeeId,
+          employeeName: user.employeeName || "",
+        },
+        type: "staff",
       };
 
       try {
@@ -571,11 +604,11 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         console.error("Unable to save staff details:", error);
       }
 
-      setStaffDetails(user);
-      setEmployeeId(user.employeeId || "");
+      setStaffDetails(newDetails.user);
+      setEmployeeId(nextEmployeeId);
       setAuthToken(payload.token);
 
-      await refreshStatus(payload.token, user.employeeId);
+      await refreshStatus(payload.token, nextEmployeeId);
     });
 
     return () => {
@@ -583,7 +616,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         removeAuthSync();
       }
     };
-  }, [refreshStatus]);
+  }, [employeeId, refreshStatus]);
 
   // Mount setup
   useEffect(() => {
@@ -924,8 +957,53 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     }
   };
 
+  // Ends the current break on the server. Resolves only when the backend
+  // confirmed it, or when the summary endpoint verifies no break is active.
+  const endBreakOnServer = async (matchFn) => {
+    try {
+      const res = await apiCall("/work-session/end-break", "POST", {
+        employeeId,
+      });
+      const breakRecord =
+        res?.data?.break ||
+        res?.data?.endedBreak ||
+        res?.data?.currentBreak ||
+        res?.break ||
+        null;
+      return { breakRecord };
+    } catch (err) {
+      const lower = String(err?.message || "").toLowerCase();
+      const looksLikeAlreadyEnded = [
+        "no active break",
+        "break not found",
+        "no break",
+        "already ended",
+        "not currently on break",
+      ].some((k) => lower.includes(k));
+      if (!looksLikeAlreadyEnded) throw err;
+
+      // Message alone is not proof: verify against server state.
+      // If this call also fails, its error propagates and nothing is cleared.
+      const summary = await apiCall(
+        `/work-session/summary/${employeeId}`,
+        "GET",
+      );
+      const d = summary?.data;
+      const stillOnBreak =
+        String(d?.status || "").toLowerCase() === "on_break" ||
+        !!d?.currentBreak;
+      if (stillOnBreak) throw err;
+
+      const ended = Array.isArray(d?.breaks)
+        ? [...d.breaks].reverse().find((b) => b.endTime && matchFn(b))
+        : null;
+      return { breakRecord: ended || null };
+    }
+  };
+
   // Start Scheduled Break (Lunch: 45m, Tea: 15m)
   const handleStartScheduledBreak = async (type, durationMin) => {
+    if (isLoading) return;
     setIsLoading(true);
     setError("");
     try {
@@ -951,6 +1029,10 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       scheduledBreakEndMsRef.current = endMs;
       finishedNoticeShownRef.current = false;
 
+      // Card is shown only after the server accepted the break.
+      setActiveSeparateCard(type);
+      setShowLunchFinished(false);
+      setShowTeaFinished(false);
       setScheduledBreakRunning(true);
       setScheduledBreakRemaining(
         Math.max(0, Math.ceil((endMs - Date.now()) / 1000)),
@@ -961,16 +1043,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       setPunchStatus("break");
       broadcastSync("STATE_UPDATED", { status: "on_break", type });
     } catch (err) {
+      // No local fallback: a break the server doesn't know about can't be
+      // ended later.
       setError(err.message || `Unable to start ${type} break`);
-      // Local fallback: anchor to now (server was unreachable).
-      const startMs = Date.now();
-      const endMs = startMs + durationMin * 60 * 1000;
-      scheduledBreakStartMsRef.current = startMs;
-      scheduledBreakEndMsRef.current = endMs;
-      finishedNoticeShownRef.current = false;
-      setScheduledBreakRunning(true);
-      setScheduledBreakRemaining(durationMin * 60);
-      setScheduledBreakElapsed(0);
     } finally {
       setIsLoading(false);
     }
@@ -980,100 +1055,49 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   const handleFinishScheduledBreak = async () => {
     // Prevent duplicate /end-break calls
     if (finishingBreakRef.current) return;
+    const breakType = activeSeparateCard;
+    if (breakType !== "lunch" && breakType !== "tea") return;
+
     finishingBreakRef.current = true;
     setIsFinishingBreak(true);
     setError("");
 
     const todayStr = new Date().toISOString().split("T")[0];
-    const breakType = activeSeparateCard;
 
     try {
-      let res = null;
-      let apiFailed = false;
-      let apiErrorMessage = "";
+      const { breakRecord } = await endBreakOnServer((b) =>
+        String(b.type || b.reason || "")
+          .toLowerCase()
+          .includes(breakType),
+      );
+      const actualSeconds = getBreakSeconds(
+        breakRecord,
+        scheduledBreakStartMsRef.current,
+      );
 
-      try {
-        res = await apiCall("/work-session/end-break", "POST", {
-          employeeId,
-        });
-      } catch (err) {
-        apiFailed = true;
-        apiErrorMessage = err?.message || "";
-
-        // If the backend already auto-ended the break (scheduled expiry
-        // handled server-side), this is not an error — proceed with the
-        // local reset so the UI can move on.
-        const lower = apiErrorMessage.toLowerCase();
-        const looksLikeNoActiveBreak =
-          lower.includes("no active break") ||
-          lower.includes("break not found") ||
-          lower.includes("no break") ||
-          lower.includes("already ended") ||
-          lower.includes("not currently on break");
-
-        if (!looksLikeNoActiveBreak) {
-          throw err;
-        }
-      }
-
-      // Accept any response shape the backend uses
-      const actualBreak =
-        res?.data?.break ||
-        res?.data?.endedBreak ||
-        res?.data?.currentBreak ||
-        res?.break ||
-        null;
-
-      // Compute actual seconds — prefer backend truth, else derive from anchors
-      let actualSeconds = 0;
-      if (actualBreak) {
-        actualSeconds = Math.max(
-          0,
-          Number(
-            actualBreak.durationSeconds ??
-              Math.round(Number(actualBreak.duration || 0) * 60),
-          ),
-        );
-      } else if (scheduledBreakStartMsRef.current != null) {
-        actualSeconds = Math.max(
-          0,
-          Math.floor((Date.now() - scheduledBreakStartMsRef.current) / 1000),
-        );
-      }
-
-      // Clear timestamp anchors
+      // Everything below runs only after backend success / verified end.
       scheduledBreakStartMsRef.current = null;
       scheduledBreakEndMsRef.current = null;
       finishedNoticeShownRef.current = false;
 
-      // Reset break UI state
       setScheduledBreakRunning(false);
       setScheduledBreakElapsed(actualSeconds);
       setScheduledBreakRemaining(0);
       setActiveSeparateCard(null);
       setShowLunchFinished(false);
       setShowTeaFinished(false);
+      setShowEndConfirm(false); // never open End Work confirmation from here
       setPunchStatus("in");
 
-      // Mark this break as done for today
-      if (breakType === "lunch") {
-        localStorage.setItem(`pms_lunch_done_${todayStr}`, "1");
-        try {
-          localStorage.setItem(
-            `pms_lunch_taken_${todayStr}`,
-            String(actualSeconds),
-          );
-        } catch (_) {}
-      }
-      if (breakType === "tea") {
-        localStorage.setItem(`pms_tea_done_${todayStr}`, "1");
-        try {
-          localStorage.setItem(
-            `pms_tea_taken_${todayStr}`,
-            String(actualSeconds),
-          );
-        } catch (_) {}
-      }
+      try {
+        localStorage.setItem(`pms_${breakType}_done_${todayStr}`, "1");
+        localStorage.setItem(
+          `pms_${breakType}_taken_${todayStr}`,
+          String(actualSeconds),
+        );
+      } catch (_) {}
+      if (breakType === "lunch") setLunchTakenSec(actualSeconds);
+      else setTeaTakenSec(actualSeconds);
 
       isCurrentlyIdleRef.current = false;
       setIsCurrentlyIdle(false);
@@ -1086,16 +1110,8 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       refreshStatus(authToken, employeeId).catch((e) =>
         console.warn("Post-break refresh failed:", e?.message),
       );
-
-      // ===== Open the End Work popup after finishing the break =====
-      if (apiFailed) {
-        console.warn(
-          "end-break API reported no active break — UI advanced locally:",
-          apiErrorMessage,
-        );
-      }
     } catch (err) {
-      console.error("Finish break API failed:", err);
+      console.error("Finish break failed:", err);
       setError(err?.message || "Unable to finish break. Check connection.");
       // The break card stays visible so the user can retry.
     } finally {
@@ -1103,7 +1119,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       setIsFinishingBreak(false);
     }
   };
- 
+
   // Manual generic break (Personal Break, Meeting, etc.)
   const handleStartManualBreak = async () => {
     setIsLoading(true);
@@ -1177,47 +1193,14 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     setError("");
 
     try {
-      let res = null;
-      let apiFailed = false;
-      let apiErrorMessage = "";
-
-      try {
-        res = await apiCall("/work-session/end-break", "POST", { employeeId });
-      } catch (err) {
-        apiFailed = true;
-        apiErrorMessage = err?.message || "";
-        const lower = apiErrorMessage.toLowerCase();
-        const looksLikeNoActiveBreak =
-          lower.includes("no active break") ||
-          lower.includes("break not found") ||
-          lower.includes("no break") ||
-          lower.includes("already ended") ||
-          lower.includes("not currently on break");
-        if (!looksLikeNoActiveBreak) throw err;
-      }
-
-      const actualBreak =
-        res?.data?.break ||
-        res?.data?.endedBreak ||
-        res?.data?.currentBreak ||
-        res?.break ||
-        null;
-
-      let actualSeconds = 0;
-      if (actualBreak) {
-        actualSeconds = Math.max(
-          0,
-          Number(
-            actualBreak.durationSeconds ??
-              Math.round(Number(actualBreak.duration || 0) * 60),
-          ),
-        );
-      } else if (manualBreakStartMsRef.current != null) {
-        actualSeconds = Math.max(
-          0,
-          Math.floor((Date.now() - manualBreakStartMsRef.current) / 1000),
-        );
-      }
+      const { breakRecord } = await endBreakOnServer(
+        (b) =>
+          !/lunch|tea/.test(String(b.type || b.reason || "").toLowerCase()),
+      );
+      const actualSeconds = getBreakSeconds(
+        breakRecord,
+        manualBreakStartMsRef.current,
+      );
 
       const todayStr = new Date().toISOString().split("T")[0];
 
@@ -1227,9 +1210,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             ? {
                 ...item,
                 status: "ended",
-                startTime: actualBreak?.startTime || item.startTime,
-                endTime: actualBreak?.endTime || new Date().toISOString(),
-                duration: actualBreak?.duration,
+                startTime: breakRecord?.startTime || item.startTime,
+                endTime: breakRecord?.endTime || new Date().toISOString(),
+                duration: breakRecord?.duration ?? item.duration,
                 takenSec: actualSeconds,
               }
             : item,
@@ -1246,6 +1229,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       manualBreakStartMsRef.current = null;
       manualBreakEndMsRef.current = null;
 
+      setShowEndConfirm(false); // never open End Work confirmation from here
       setPunchStatus("in");
       setBreakInfo(null);
       setBreakRemainingSec(0);
@@ -1260,15 +1244,6 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       refreshStatus(authToken, employeeId).catch((e) =>
         console.warn("Post-break refresh failed:", e?.message),
       );
-
-
-
-      if (apiFailed) {
-        console.warn(
-          "Manual end-break API reported no active break — UI advanced locally:",
-          apiErrorMessage,
-        );
-      }
     } catch (err) {
       console.error("Resume manual break failed:", err);
       setError(err?.message || "Unable to resume work");
@@ -1409,10 +1384,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       {/* ============================================================== */}
       {/* 🍱 SEPARATE CARD 1: ACTIVE LUNCH BREAK (1:00 PM - 1:45 PM)     */}
       {/* ============================================================== */}
-      {activeSeparateCard === "tea" && (
+      {activeSeparateCard === "lunch" && (
         <div
-          // Yaha bhi overflow-y-auto kar dein
-          className="bg-white rounded-3xl border border-teal-200 shadow-2xl p-3.5 sm:p-4 max-w-[650px] w-full mx-auto relative overflow-y-auto animate-slide-in font-sans"
+          className="bg-white rounded-3xl border border-amber-200 shadow-2xl p-3.5 sm:p-4 max-w-[650px] w-full mx-auto relative overflow-y-auto overflow-x-hidden max-h-[85vh] animate-slide-in font-sans"
           style={{ backgroundColor: "#ffffff" }}
         >
           {/* Draggable header bar */}
@@ -1488,7 +1462,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
           {/* Lunch Finished Prompt Notification */}
           {showLunchFinished && (
-            <div className="mb-3 p-3 bg-emerald-50 border border-emerald-300 rounded-2xl text-center">
+            <div className="mb-2 p-2 bg-emerald-50 border border-emerald-300 rounded-xl text-center">
               <span className="text-2xl">🔔</span>
               <h4 className="font-syne font-bold text-emerald-900 text-xs mt-1">
                 Lunch Time Finished!
@@ -1499,8 +1473,27 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             </div>
           )}
 
+          {/* Error notification (visible on the break card too) */}
+          {error && (
+            <div className="mb-2 p-1.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center justify-between">
+              <span className="flex items-center gap-1.5 font-medium">
+                <FiAlertCircle /> {error}
+              </span>
+              <button
+                type="button"
+                onClick={() => setError("")}
+                className="text-red-500 font-bold ml-2"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
           {/* Action Buttons */}
-          <div className="space-y-2" style={{ WebkitAppRegion: "no-drag" }}>
+          <div
+            className="space-y-2 sticky bottom-0 bg-white pt-2 pb-1 z-10"
+            style={{ WebkitAppRegion: "no-drag" }}
+          >
             {!scheduledBreakRunning ? (
               <button
                 type="button"
@@ -1539,7 +1532,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       {/* ============================================================== */}
       {activeSeparateCard === "tea" && (
         <div
-          className="bg-white rounded-3xl border border-teal-200 shadow-2xl p-3.5 sm:p-4 max-w-[650px] w-full mx-auto relative overflow-hidden animate-slide-in font-sans"
+          className="bg-white rounded-3xl border border-teal-200 shadow-2xl p-3.5 sm:p-4 max-w-[650px] w-full mx-auto relative overflow-y-auto overflow-x-hidden max-h-[85vh] animate-slide-in font-sans"
           style={{ backgroundColor: "#ffffff" }}
         >
           <div
@@ -1611,7 +1604,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           )}
 
           {showTeaFinished && (
-            <div className="mb-3 p-3 bg-emerald-50 border border-emerald-300 rounded-2xl text-center">
+            <div className="mb-2 p-2 bg-emerald-50 border border-emerald-300 rounded-xl text-center">
               <span className="text-2xl">🔔</span>
               <h4 className="font-syne font-bold text-emerald-900 text-xs mt-1">
                 Tea Break Finished!
@@ -1622,7 +1615,26 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             </div>
           )}
 
-          <div className="space-y-2" style={{ WebkitAppRegion: "no-drag" }}>
+          {/* Error notification (visible on the break card too) */}
+          {error && (
+            <div className="mb-2 p-1.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center justify-between">
+              <span className="flex items-center gap-1.5 font-medium">
+                <FiAlertCircle /> {error}
+              </span>
+              <button
+                type="button"
+                onClick={() => setError("")}
+                className="text-red-500 font-bold ml-2"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          <div
+            className="space-y-2 sticky bottom-0 bg-white pt-2 pb-1 z-10"
+            style={{ WebkitAppRegion: "no-drag" }}
+          >
             {!scheduledBreakRunning ? (
               <button
                 type="button"
@@ -1872,10 +1884,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                         ) : (
                           <button
                             type="button"
-                            onClick={() => {
-                              setActiveSeparateCard("lunch");
-                              handleStartScheduledBreak("lunch", 45);
-                            }}
+                            onClick={() =>
+                              handleStartScheduledBreak("lunch", 45)
+                            }
                             className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10px] px-2.5 py-0.5 rounded-md transition-all shadow-2xs cursor-pointer flex items-center gap-1"
                           >
                             <FiPlay className="text-[9px]" /> Lunch
@@ -1930,10 +1941,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                         ) : (
                           <button
                             type="button"
-                            onClick={() => {
-                              setActiveSeparateCard("tea");
-                              handleStartScheduledBreak("tea", 15);
-                            }}
+                            onClick={() => handleStartScheduledBreak("tea", 15)}
                             className="bg-teal-600 hover:bg-teal-700 text-white font-bold text-[10px] px-2.5 py-0.5 rounded-md transition-all shadow-2xs cursor-pointer flex items-center gap-1"
                           >
                             <FiPlay className="text-[9px]" /> Tea

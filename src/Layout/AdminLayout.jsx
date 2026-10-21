@@ -2,37 +2,65 @@ import { useState, useEffect } from "react";
 import Sidebar from "../Components/Sidebar";
 import Navbar from "../Components/Navbar";
 
-const openDesktopWidget = (url = 'pms-widget://open') => {
-  try {
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = url;
-    document.body.appendChild(iframe);
-    setTimeout(() => iframe.remove(), 1500);
-  } catch (_) {}
-};
-
 const syncDesktopWidget = async (staffObj) => {
-  if (!staffObj?.token || !staffObj?.user) return;
-  const body = JSON.stringify(staffObj);
-  openDesktopWidget();
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    try {
-      const response = await fetch('https://pmsbackend.pixelmindsolutions.com/login-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body
-      });
-      if (!response.ok) continue;
-      const result = await response.json();
-      if (result.success && result.syncId) {
-        openDesktopWidget(`pms-widget://sync/${encodeURIComponent(result.syncId)}`);
-        return;
-      }
-    } catch (_) {}
+  const user = staffObj?.user;
+
+  if (!staffObj?.token || !user || !(user.employeeId || user._id)) {
+    console.error("Widget sync skipped: invalid staff login data", {
+      hasToken: Boolean(staffObj?.token),
+      hasUser: Boolean(user),
+      employeeId: user?.employeeId || null,
+      type: staffObj?.type || null,
+    });
+    return;
   }
-  console.warn('PMS Staff desktop widget did not respond. Make sure it is installed and allowed to open.');
+
+  if (staffObj.type && staffObj.type !== "staff") {
+    console.error("Widget sync skipped: current user is not staff");
+    return;
+  }
+
+  try {
+    console.log("Creating widget sync for:", {
+      employeeId: user.employeeId,
+      employeeName: user.employeeName,
+    });
+
+    const response = await fetch(
+      "https://pmsbackend.pixelmindsolutions.com/login-sync",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(staffObj),
+      },
+    );
+
+    const result = await response.json();
+
+    console.log("Widget sync API result:", {
+      status: response.status,
+      success: result.success,
+      syncIdReceived: Boolean(result.syncId),
+      employeeId: result.user?.employeeId,
+      employeeName: result.user?.employeeName,
+    });
+
+    if (!response.ok || !result.success || !result.syncId) {
+      console.error("Widget sync API failed:", result.message);
+      return;
+    }
+
+    if (!/^[a-f0-9]{48}$/.test(result.syncId)) {
+      console.error("Widget sync returned an invalid sync ID");
+      return;
+    }
+
+    // This requests Electron to handle the sync.
+    // It does not guarantee that Electron has completed it.
+    window.location.href = `pms-widget://sync/${result.syncId}`;
+  } catch (error) {
+    console.error("Widget sync failed:", error.message);
+  }
 };
 
 export default function AdminLayout({ children }) {
@@ -51,26 +79,17 @@ export default function AdminLayout({ children }) {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  useEffect(() => {
-    try {
-      const staffRaw = sessionStorage.getItem('staffDetails') || localStorage.getItem('staffDetails');
-      if (staffRaw) syncDesktopWidget(JSON.parse(staffRaw));
-    } catch (_) {}
-  }, []);
-
   const openWidgetPopup = () => {
     try {
-      const staffRaw = sessionStorage.getItem('staffDetails') || localStorage.getItem('staffDetails');
+      const staffRaw =
+        sessionStorage.getItem("staffDetails") ||
+        localStorage.getItem("staffDetails");
       if (staffRaw) syncDesktopWidget(JSON.parse(staffRaw));
-      else openDesktopWidget();
-    } catch (_) {
-      openDesktopWidget();
-    }
+    } catch (_) {}
   };
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-teal-50/30 relative">
-
       {/* ── Sidebar ── */}
       <Sidebar
         isCollapsed={isCollapsed}
@@ -80,7 +99,6 @@ export default function AdminLayout({ children }) {
 
       {/* ── Main column ── */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-
         {/* ── Navbar ── */}
         <Navbar
           isCollapsed={isCollapsed}
@@ -90,11 +108,8 @@ export default function AdminLayout({ children }) {
 
         {/* ── Page content ── */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden bg-teal-50/40 p-4 sm:p-5 lg:p-6">
-          <div className="w-full max-w-screen-2xl mx-auto">
-            {children}
-          </div>
+          <div className="w-full max-w-screen-2xl mx-auto">{children}</div>
         </main>
-
       </div>
 
       {/* Floating Attendance Widget Launcher */}
@@ -107,7 +122,9 @@ export default function AdminLayout({ children }) {
         >
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
           <span>Attendance Widget</span>
-          <span className="bg-white/20 group-hover:bg-white/30 text-[10px] px-1.5 py-0.5 rounded-md font-semibold transition-colors">↗ Pop Out</span>
+          <span className="bg-white/20 group-hover:bg-white/30 text-[10px] px-1.5 py-0.5 rounded-md font-semibold transition-colors">
+            ↗ Pop Out
+          </span>
         </button>
       </div>
     </div>
