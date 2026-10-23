@@ -167,7 +167,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
         window.electronAPI.setHeight(showFinishedBanner ? 620 : 420);
       } else {
-        window.electronAPI.setHeight(385);
+        window.electronAPI.setHeight(560);
       }
     }
   }, [
@@ -1727,7 +1727,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       {/* ============================================================== */}
       {activeSeparateCard === null && (
         <div
-          className="bg-white rounded-3xl border border-slate-200/90 shadow-2xl p-3.5 max-w-[650px] w-full mx-auto relative overflow-hidden transition-all font-sans"
+          className="bg-white rounded-3xl border border-slate-200/90 shadow-2xl p-3.5 max-w-[650px] w-full mx-auto relative overflow-visible transition-all font-sans"
           style={{ backgroundColor: "#ffffff" }}
         >
           {/* Top Header - Draggable on desktop wallpaper */}
@@ -2363,3 +2363,4 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 };
 
 export default AttendanceWidget;
+
