@@ -205,10 +205,10 @@ function startFallbackServer() {
 
 async function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
-  const { width: screenWidth } = primaryDisplay.workAreaSize;
+  const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
 
-  const windowWidth = 660;
-  const windowHeight = 385;
+  const windowWidth = Math.min(1440, screenWidth - 40);
+  const windowHeight = Math.min(900, screenHeight - 50);
   const x = Math.max(10, screenWidth - windowWidth - 25);
   const y = 25;
 
@@ -334,42 +334,28 @@ if (!gotTheLock) {
     return null;
   });
 
+  ipcMain.on("window-set-height", (_event, height) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+    const width = Math.min(1440, screenWidth - 40);
+    const safeHeight = Math.min(Math.max(75, Number(height) || 900), screenHeight - 30);
+    mainWindow.setSize(width, safeHeight);
+    mainWindow.setPosition(Math.max(10, screenWidth - width - 25), 25);
+  });
+
   ipcMain.on("window-toggle-size", () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
-
     const primaryDisplay = screen.getPrimaryDisplay();
-    const { width: screenWidth } = primaryDisplay.workAreaSize;
-
-    if (!isCompact) {
-      mainWindow.setSize(660, 75);
-      mainWindow.setPosition(screenWidth - 685, 25);
-      isCompact = true;
-    } else {
-      mainWindow.setSize(660, 385);
-      mainWindow.setPosition(screenWidth - 685, 25);
-      isCompact = false;
-    }
-
+    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+    const width = Math.min(1440, screenWidth - 40);
+    const height = isCompact ? Math.min(900, screenHeight - 50) : 75;
+    isCompact = !isCompact;
+    mainWindow.setSize(width, height);
+    mainWindow.setPosition(Math.max(10, screenWidth - width - 25), 25);
     mainWindow.show();
     mainWindow.focus();
   });
-
-  ipcMain.on("window-toggle-size", () => {
-    if (mainWindow) {
-      const primaryDisplay = screen.getPrimaryDisplay();
-      const { width: screenWidth } = primaryDisplay.workAreaSize;
-      if (!isCompact) {
-        mainWindow.setSize(660, 75);
-        mainWindow.setPosition(screenWidth - 685, 25);
-        isCompact = true;
-      } else {
-        mainWindow.setSize(660, 385);
-        mainWindow.setPosition(screenWidth - 685, 25);
-        isCompact = false;
-      }
-    }
-  });
-
   ipcMain.on("window-close", () => {
     // Disabled: no employee is permitted to close the widget
   });

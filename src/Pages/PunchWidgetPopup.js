@@ -114,8 +114,8 @@ const PunchWidgetPopup = () => {
   };
 
   return (
-    <div className="w-screen min-h-screen flex items-start justify-center p-2 bg-transparent select-none overflow-y-auto">
-      <div className="w-full max-w-[660px]">
+    <div className="w-screen min-h-screen flex items-start justify-center p-4 bg-transparent select-none overflow-y-auto">
+      <div className="w-full max-w-[1440px]">
         {isAuth ? (
           <AttendanceWidget key={authRevision} isStandalonePopup={true} />
         ) : (

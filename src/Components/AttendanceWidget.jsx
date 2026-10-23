@@ -167,7 +167,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
         window.electronAPI.setHeight(showFinishedBanner ? 620 : 420);
       } else {
-        window.electronAPI.setHeight(560);
+        window.electronAPI.setHeight(900);
       }
     }
   }, [
@@ -1408,6 +1408,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
   return (
     <div className="relative select-none font-sans">
+      <style>{".attendance-dashboard-card{padding:clamp(16px,2.2vw,32px)}.attendance-dashboard-content{display:flex;flex-direction:column;gap:clamp(12px,2.2vh,32px)}.attendance-dashboard-brand img{width:clamp(56px,6vw,96px);height:clamp(56px,6vw,96px)}.attendance-dashboard-brand h3{font-size:clamp(24px,2.7vw,40px);line-height:1.1}.attendance-dashboard-brand p{font-size:clamp(14px,1.4vw,20px)}.attendance-dashboard-timers{gap:clamp(12px,3vw,48px)}.attendance-dashboard-timer{padding:clamp(14px,2.1vw,28px);min-width:0}.attendance-dashboard-timer-label{font-size:clamp(16px,1.7vw,24px)}.attendance-dashboard-timer-value{font-size:clamp(30px,3.4vw,48px);line-height:1.15;overflow-wrap:anywhere}.attendance-dashboard-breaks{width:min(100%,880px);gap:clamp(12px,3vw,48px);padding-top:clamp(14px,2.2vh,32px)}.attendance-dashboard-breaks button{min-width:0;padding:clamp(12px,1.8vw,24px)}.attendance-dashboard-break-label{font-size:clamp(17px,1.8vw,24px)}.attendance-dashboard-break-value{font-size:clamp(22px,2.2vw,30px)}.attendance-dashboard-login{font-size:clamp(17px,1.8vw,24px);gap:12px}.attendance-dashboard-end{padding:clamp(12px,2vh,20px);font-size:clamp(18px,2vw,28px)}@media(max-height:650px){.attendance-dashboard-content{gap:10px}.attendance-dashboard-card{padding:12px}}"}</style>
       {/* ============================================================== */}
       {/* 🍱 SEPARATE CARD 1: ACTIVE LUNCH BREAK (1:00 PM - 1:45 PM)     */}
       {/* ============================================================== */}
@@ -1715,7 +1716,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 ) : (
                   <FiCheckCircle />
                 )}
-                FINISH TEA BREAK & RESUME WORK 🚀
+                START WORK
               </button>
             )}
           </div>
@@ -1727,10 +1728,10 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       {/* ============================================================== */}
       {activeSeparateCard === null && (
         <div
-          className="bg-white rounded-3xl border border-slate-200/90 shadow-2xl p-3.5 max-w-[650px] w-full mx-auto relative overflow-visible transition-all font-sans"
+          className="bg-white rounded-[28px] border border-slate-200/90 shadow-2xl attendance-dashboard-card max-w-[1440px] w-full mx-auto relative overflow-visible transition-all font-sans"
           style={{ backgroundColor: "#ffffff" }}
         >
-          {/* Top Header - Draggable on desktop wallpaper */}
+          {!(punchStatus === "in" || punchStatus === "break") && (
           <div
             className="flex justify-between items-center mb-2.5 pb-2 border-b border-slate-100"
             style={{ WebkitAppRegion: "drag" }}
@@ -1768,6 +1769,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
               {renderWindowButtons()}
             </div>
           </div>
+          )}
 
           {/* Error notification */}
           {error && (
@@ -1787,39 +1789,42 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           {/* 2-COLUMN HALF-HEIGHT LAYOUT (Clock/Timers on Left, Breaks on Right) */}
           {punchStatus === "in" || punchStatus === "break" ? (
             <>
-            <div className="space-y-4 px-1 pb-1" style={{ WebkitAppRegion: "no-drag" }}>
-              <div className="flex justify-center items-center gap-3 pt-1">
-                <img src="/pms_logo.png" alt="Pixelmind Solutions" className="w-14 h-14 object-contain" />
+            <div className="attendance-dashboard-content px-2 pb-2" style={{ WebkitAppRegion: "no-drag" }}>
+              <div className="absolute right-8 top-8" style={{ WebkitAppRegion: "no-drag" }}>
+                {renderWindowButtons()}
+              </div>
+              <div className="attendance-dashboard-brand flex justify-center items-center gap-3 pt-1">
+                <img src="/pms_logo.png" alt="Pixelmind Solutions" className="w-24 h-24 object-contain" />
                 <div>
-                  <h3 className="text-xl font-extrabold text-[#006b67]">Pixelmind</h3>
-                  <p className="text-[11px] text-slate-600">Solutions Pvt Ltd</p>
+                  <h3 className="text-4xl font-extrabold text-[#006b67]">Pixelmind</h3>
+                  <p className="text-xl text-slate-600">Solutions Pvt Ltd</p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="border border-[#00a99d] rounded-lg bg-[#fafafa] px-3 py-3">
-                  <div className="text-xs font-semibold text-gray-500">Working Time</div>
-                  <div className="text-2xl text-[#00a99d] font-bold text-right tabular-nums">{formatSecToHMS(workingSeconds)}</div>
+              <div className="attendance-dashboard-timers grid grid-cols-2">
+                <div className="attendance-dashboard-timer border border-slate-200 rounded-2xl bg-[#fafafa]">
+                  <div className="attendance-dashboard-timer-label font-normal text-slate-600">Working Time</div>
+                  <div className="attendance-dashboard-timer-value text-[#008f88] font-extrabold text-right tabular-nums">{formatSecToHMS(workingSeconds)}</div>
                 </div>
-                <div className="border border-[#00a99d] rounded-lg bg-[#fafafa] px-3 py-3">
-                  <div className="text-xs font-semibold text-gray-500">Delay Time</div>
-                  <div className="text-2xl text-red-600 font-bold text-right tabular-nums">{formatSecToHMS(delaySeconds)}</div>
+                <div className="attendance-dashboard-timer border border-slate-200 rounded-2xl bg-[#fafafa]">
+                  <div className="attendance-dashboard-timer-label font-normal text-slate-600">Delay Time</div>
+                  <div className="attendance-dashboard-timer-value text-red-600 font-extrabold text-right tabular-nums">{formatSecToHMS(delaySeconds)}</div>
                 </div>
               </div>
-              <div className="border-t border-gray-200 pt-4 grid grid-cols-2 gap-4 max-w-sm mx-auto">
-                <button type="button" onClick={() => handleStartScheduledBreak("lunch", 45)} disabled={isLoading || punchStatus === "break" || localStorage.getItem(`pms_lunch_done_${new Date().toISOString().split("T")[0]}`) === "1" || (workSecondsAtLastScheduledBreakResume != null && workingSeconds - workSecondsAtLastScheduledBreakResume < 15 * 60)} className="text-left border border-[#00a99d] rounded-lg px-3 py-2 bg-[#fafafa] disabled:opacity-50 disabled:cursor-not-allowed">
-                  <span className="block text-sm font-semibold text-black">Lunch Break</span>
-                  <span className="block text-right text-[#00897b] font-bold tabular-nums">{activeSeparateCard === "lunch" && scheduledBreakRunning ? formatSecToMS(scheduledBreakRemaining) : "45:00"}</span>
+              <div className="border-t border-gray-200 attendance-dashboard-breaks grid grid-cols-2 mx-auto">
+                <button type="button" onClick={() => handleStartScheduledBreak("lunch", 45)} disabled={isLoading || punchStatus === "break" || localStorage.getItem(`pms_lunch_done_${new Date().toISOString().split("T")[0]}`) === "1" || (workSecondsAtLastScheduledBreakResume != null && workingSeconds - workSecondsAtLastScheduledBreakResume < 15 * 60)} className="text-left border border-slate-200 rounded-2xl px-8 py-6 bg-white disabled:opacity-50 disabled:cursor-not-allowed">
+                  <span className="attendance-dashboard-break-label block font-normal text-slate-600">Lunch Break</span>
+                  <span className="attendance-dashboard-break-value block text-right text-[#00897b] font-extrabold tabular-nums">{activeSeparateCard === "lunch" && scheduledBreakRunning ? formatSecToMS(scheduledBreakRemaining) : "45:00"}</span>
                 </button>
-                <button type="button" onClick={() => handleStartScheduledBreak("tea", 15)} disabled={isLoading || punchStatus === "break" || localStorage.getItem(`pms_tea_done_${new Date().toISOString().split("T")[0]}`) === "1" || (workSecondsAtLastScheduledBreakResume != null && workingSeconds - workSecondsAtLastScheduledBreakResume < 15 * 60)} className="text-left border border-[#00a99d] rounded-lg px-3 py-2 bg-[#fafafa] disabled:opacity-50 disabled:cursor-not-allowed">
-                  <span className="block text-sm font-semibold text-black">Tea Break</span>
-                  <span className="block text-right text-[#00897b] font-bold tabular-nums">{activeSeparateCard === "tea" && scheduledBreakRunning ? formatSecToMS(scheduledBreakRemaining) : "15:00"}</span>
+                <button type="button" onClick={() => handleStartScheduledBreak("tea", 15)} disabled={isLoading || punchStatus === "break" || localStorage.getItem(`pms_tea_done_${new Date().toISOString().split("T")[0]}`) === "1" || (workSecondsAtLastScheduledBreakResume != null && workingSeconds - workSecondsAtLastScheduledBreakResume < 15 * 60)} className="text-left border border-slate-200 rounded-2xl px-8 py-6 bg-white disabled:opacity-50 disabled:cursor-not-allowed">
+                  <span className="attendance-dashboard-break-label block font-normal text-slate-600">Tea Break</span>
+                  <span className="attendance-dashboard-break-value block text-right text-[#00897b] font-extrabold tabular-nums">{activeSeparateCard === "tea" && scheduledBreakRunning ? formatSecToMS(scheduledBreakRemaining) : "15:00"}</span>
                 </button>
               </div>
-              <div className="flex justify-between text-xs font-semibold pt-1">
+              <div className="attendance-dashboard-login flex justify-between font-normal pt-1">
                 <span className="text-[#00897b]">Login : {punchStartTimeRef.current ? new Date(punchStartTimeRef.current).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—"}</span>
                 <span className="text-red-600">Logout : —</span>
               </div>
-              <button type="button" onClick={() => setShowEndConfirm(true)} disabled={isLoading} className="w-full bg-[#fff1f2] hover:bg-[#ffe4e6] text-[#dc2626] border border-[#fecdd3] rounded-lg py-2.5 font-bold text-sm">END WORK DAY</button>
+              <button type="button" onClick={() => setShowEndConfirm(true)} disabled={isLoading} className="attendance-dashboard-end w-full bg-[#fff1f2] hover:bg-[#ffe4e6] text-[#dc2626] border border-slate-200 rounded-2xl font-extrabold">END WORK DAY</button>
             </div>
             <div className="hidden">
             <div className="grid grid-cols-2 gap-3 items-start">
