@@ -100,6 +100,15 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       return 0;
     }
   });
+  const [workSecondsAtLastScheduledBreakResume, setWorkSecondsAtLastScheduledBreakResume] = useState(() => {
+    try {
+      const todayStr = new Date().toISOString().split("T")[0];
+      const saved = localStorage.getItem(`pms_scheduled_break_resume_${todayStr}`);
+      return saved == null ? null : Number(saved);
+    } catch (_) {
+      return 0;
+    }
+  });
 
   // Recorded Custom Breaks for Today
   const [customBreaksList, setCustomBreaksList] = useState(() => {
@@ -1004,6 +1013,20 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   // Start Scheduled Break (Lunch: 45m, Tea: 15m)
   const handleStartScheduledBreak = async (type, durationMin) => {
     if (isLoading) return;
+    const todayStr = new Date().toISOString().split("T")[0];
+    const doneToday = localStorage.getItem(`pms_${type}_done_${todayStr}`) === "1";
+    if (doneToday) {
+      setError(`${type === "tea" ? "Tea" : "Lunch"} break has already been taken today.`);
+      return;
+    }
+    const workAfterBreakSec = workSecondsAtLastScheduledBreakResume == null
+      ? Infinity
+      : Math.max(0, workingSeconds - workSecondsAtLastScheduledBreakResume);
+    if (workAfterBreakSec < 15 * 60) {
+      const remainingMinutes = Math.ceil((15 * 60 - workAfterBreakSec) / 60);
+      setError(`Please work for ${remainingMinutes} more minute${remainingMinutes === 1 ? "" : "s"} before starting another break.`);
+      return;
+    }
     setIsLoading(true);
     setError("");
     try {
@@ -1088,6 +1111,10 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       setShowTeaFinished(false);
       setShowEndConfirm(false); // never open End Work confirmation from here
       setPunchStatus("in");
+      setWorkSecondsAtLastScheduledBreakResume(workingSeconds);
+      try {
+        localStorage.setItem(`pms_scheduled_break_resume_${todayStr}`, String(workingSeconds));
+      } catch (_) {}
 
       try {
         localStorage.setItem(`pms_${breakType}_done_${todayStr}`, "1");
@@ -1386,16 +1413,16 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       {/* ============================================================== */}
       {activeSeparateCard === "lunch" && (
         <div
-          className="bg-white rounded-3xl border border-amber-200 shadow-2xl p-3.5 sm:p-4 max-w-[650px] w-full mx-auto relative overflow-y-auto overflow-x-hidden max-h-[85vh] animate-slide-in font-sans"
+          className="bg-white rounded-2xl border border-[#00a99d] shadow-xl p-5 sm:p-6 max-w-[520px] w-full mx-auto relative overflow-y-auto overflow-x-hidden max-h-[85vh] animate-slide-in font-sans"
           style={{ backgroundColor: "#ffffff" }}
         >
           {/* Draggable header bar */}
           <div
-            className="flex justify-between items-center pb-2 mb-2 border-b border-amber-100"
+            className="flex justify-center items-center pb-3 mb-4"
             style={{ WebkitAppRegion: "drag" }}
           >
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-white border border-amber-200 flex items-center justify-center p-1 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-16 h-16 bg-white flex items-center justify-center p-1 overflow-hidden">
                 <img
                   src="/pms_logo.png"
                   alt="PMS"
@@ -1403,16 +1430,14 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 />
               </div>
               <div>
-                <h3 className="font-syne font-extrabold text-amber-950 text-sm leading-tight">
-                  LUNCH BREAK ACTIVE
+                <h3 className="font-syne font-extrabold text-[#006b67] text-lg leading-tight">
+                  Pixelmind Solutions
                 </h3>
-                <p className="text-[10px] font-semibold text-amber-700">
-                  1:00 PM – 1:45 PM (45 Minutes)
-                </p>
+                <p className="text-xs font-semibold text-slate-600">Solutions Pvt Ltd</p>
               </div>
             </div>
             <div
-              className="flex items-center gap-1.5"
+              className="hidden items-center gap-1.5"
               style={{ WebkitAppRegion: "no-drag" }}
             >
               <span className="text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full">
@@ -1423,7 +1448,13 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           </div>
 
           {/* Clock Display */}
-          <div className="text-center py-2 mb-3 bg-white border border-amber-100 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between py-3 px-3 mb-4 bg-[#fafafa] border border-[#00a99d] rounded-lg shadow-xs">
+            <div className="font-bold text-black text-base">Lunch Break Started</div>
+            <div className="font-syne font-extrabold text-xl text-red-600 tabular-nums">
+              {formatSecToHMS(scheduledBreakRemaining)}
+            </div>
+          </div>
+          <div className="hidden text-center py-2 mb-3 bg-white border border-amber-100 rounded-2xl shadow-xs">
             <div className="font-syne font-extrabold text-3xl text-amber-900 tabular-nums">
               {currentTime.toLocaleTimeString("en-US", {
                 hour: "2-digit",
@@ -1439,7 +1470,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           </div>
 
           {/* Countdown & Elapsed Box */}
-          {scheduledBreakRunning && (
+          {false && scheduledBreakRunning && (
             <div className="grid grid-cols-2 gap-2 mb-4">
               <div className="bg-white border border-amber-200 rounded-xl p-3 text-center shadow-xs">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-amber-600 mb-0.5">
@@ -1491,7 +1522,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
           {/* Action Buttons */}
           <div
-            className="space-y-2 sticky bottom-0 bg-white pt-2 pb-1 z-10"
+            className="space-y-2 sticky bottom-0 bg-white pt-1 pb-1 z-10"
             style={{ WebkitAppRegion: "no-drag" }}
           >
             {!scheduledBreakRunning ? (
@@ -1499,30 +1530,38 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 type="button"
                 onClick={() => handleStartScheduledBreak("lunch", 45)}
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
+                className="w-full bg-[#00a99d] hover:bg-[#00998f] text-white py-3.5 rounded-lg font-bold text-base flex items-center justify-center gap-2 shadow-sm transition-all"
               >
                 {isLoading ? (
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <FiPlay />
                 )}
-                ACTIVE LUNCH (START 45 MINS) 🍱
+                Start Lunch Break
               </button>
             ) : (
               <button
                 type="button"
                 onClick={handleFinishScheduledBreak}
                 disabled={isFinishingBreak}
-                className="w-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all disabled:opacity-60"
+                className="w-full bg-[#00a99d] hover:bg-[#00998f] text-white py-3.5 rounded-lg font-bold text-base flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-60"
               >
                 {isFinishingBreak ? (
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <FiCheckCircle />
                 )}
-                FINISH LUNCH & RESUME WORK 🚀
+                Start Work
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setShowEndConfirm(true)}
+              disabled={isLoading}
+              className="w-full bg-[#fff1f2] hover:bg-[#ffe4e6] text-[#dc2626] border border-[#fecdd3] rounded-lg py-3 font-bold text-sm transition-all disabled:opacity-50"
+            >
+              END WORK DAY
+            </button>
           </div>
         </div>
       )}
@@ -1532,15 +1571,15 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       {/* ============================================================== */}
       {activeSeparateCard === "tea" && (
         <div
-          className="bg-white rounded-3xl border border-teal-200 shadow-2xl p-3.5 sm:p-4 max-w-[650px] w-full mx-auto relative overflow-y-auto overflow-x-hidden max-h-[85vh] animate-slide-in font-sans"
+          className="bg-white rounded-2xl border border-[#00a99d] shadow-xl p-5 sm:p-6 max-w-[520px] w-full mx-auto relative overflow-y-auto overflow-x-hidden max-h-[85vh] animate-slide-in font-sans"
           style={{ backgroundColor: "#ffffff" }}
         >
           <div
-            className="flex justify-between items-center pb-2 mb-2 border-b border-teal-100"
+            className="flex justify-center items-center pb-3 mb-4"
             style={{ WebkitAppRegion: "drag" }}
           >
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-white border border-teal-200 flex items-center justify-center p-1 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-16 h-16 bg-white flex items-center justify-center p-1 overflow-hidden">
                 <img
                   src="/pms_logo.png"
                   alt="PMS"
@@ -1557,7 +1596,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
               </div>
             </div>
             <div
-              className="flex items-center gap-1.5"
+              className="hidden items-center gap-1.5"
               style={{ WebkitAppRegion: "no-drag" }}
             >
               <span className="text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200 px-2 py-0.5 rounded-full">
@@ -1567,7 +1606,13 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             </div>
           </div>
 
-          <div className="text-center py-2 mb-3 bg-white border border-teal-100 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between py-3 px-3 mb-4 bg-[#fafafa] border border-[#00a99d] rounded-lg shadow-xs">
+            <div className="font-bold text-black text-base">Tea Break Started</div>
+            <div className="font-syne font-extrabold text-xl text-red-600 tabular-nums">
+              {formatSecToHMS(scheduledBreakRemaining)}
+            </div>
+          </div>
+          <div className="hidden text-center py-2 mb-3 bg-white border border-teal-100 rounded-2xl shadow-xs">
             <div className="font-syne font-extrabold text-3xl text-teal-900 tabular-nums">
               {currentTime.toLocaleTimeString("en-US", {
                 hour: "2-digit",
@@ -1582,7 +1627,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             </p>
           </div>
 
-          {scheduledBreakRunning && (
+          {false && scheduledBreakRunning && (
             <div className="grid grid-cols-2 gap-2 mb-4">
               <div className="bg-white border border-teal-200 rounded-xl p-3 text-center shadow-xs">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-teal-600 mb-0.5">
@@ -1615,6 +1660,15 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             </div>
           )}
 
+          <button
+            type="button"
+            onClick={() => setShowEndConfirm(true)}
+            disabled={isLoading}
+            className="w-full bg-[#fff1f2] hover:bg-[#ffe4e6] text-[#dc2626] border border-[#fecdd3] rounded-lg py-3 font-bold text-sm transition-all disabled:opacity-50 mb-2"
+          >
+            END WORK DAY
+          </button>
+
           {/* Error notification (visible on the break card too) */}
           {error && (
             <div className="mb-2 p-1.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center justify-between">
@@ -1640,7 +1694,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 type="button"
                 onClick={() => handleStartScheduledBreak("tea", 15)}
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
+                className="w-full bg-[#00a99d] hover:bg-[#00998f] text-white py-3.5 rounded-lg font-bold text-base flex items-center justify-center gap-2 shadow-sm transition-all"
               >
                 {isLoading ? (
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -1654,7 +1708,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 type="button"
                 onClick={handleFinishScheduledBreak}
                 disabled={isFinishingBreak}
-                className="w-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white py-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all disabled:opacity-60"
+                className="w-full bg-[#00a99d] hover:bg-[#00998f] text-white py-3.5 rounded-lg font-bold text-base flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-60"
               >
                 {isFinishingBreak ? (
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -1732,6 +1786,42 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
           {/* 2-COLUMN HALF-HEIGHT LAYOUT (Clock/Timers on Left, Breaks on Right) */}
           {punchStatus === "in" || punchStatus === "break" ? (
+            <>
+            <div className="space-y-4 px-1 pb-1" style={{ WebkitAppRegion: "no-drag" }}>
+              <div className="flex justify-center items-center gap-3 pt-1">
+                <img src="/pms_logo.png" alt="Pixelmind Solutions" className="w-14 h-14 object-contain" />
+                <div>
+                  <h3 className="text-xl font-extrabold text-[#006b67]">Pixelmind</h3>
+                  <p className="text-[11px] text-slate-600">Solutions Pvt Ltd</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="border border-[#00a99d] rounded-lg bg-[#fafafa] px-3 py-3">
+                  <div className="text-xs font-semibold text-gray-500">Working Time</div>
+                  <div className="text-2xl text-[#00a99d] font-bold text-right tabular-nums">{formatSecToHMS(workingSeconds)}</div>
+                </div>
+                <div className="border border-[#00a99d] rounded-lg bg-[#fafafa] px-3 py-3">
+                  <div className="text-xs font-semibold text-gray-500">Delay Time</div>
+                  <div className="text-2xl text-red-600 font-bold text-right tabular-nums">{formatSecToHMS(delaySeconds)}</div>
+                </div>
+              </div>
+              <div className="border-t border-gray-200 pt-4 grid grid-cols-2 gap-4 max-w-sm mx-auto">
+                <button type="button" onClick={() => handleStartScheduledBreak("lunch", 45)} disabled={isLoading || punchStatus === "break" || localStorage.getItem(`pms_lunch_done_${new Date().toISOString().split("T")[0]}`) === "1" || (workSecondsAtLastScheduledBreakResume != null && workingSeconds - workSecondsAtLastScheduledBreakResume < 15 * 60)} className="text-left border border-[#00a99d] rounded-lg px-3 py-2 bg-[#fafafa] disabled:opacity-50 disabled:cursor-not-allowed">
+                  <span className="block text-sm font-semibold text-black">Lunch Break</span>
+                  <span className="block text-right text-[#00897b] font-bold tabular-nums">{activeSeparateCard === "lunch" && scheduledBreakRunning ? formatSecToMS(scheduledBreakRemaining) : "45:00"}</span>
+                </button>
+                <button type="button" onClick={() => handleStartScheduledBreak("tea", 15)} disabled={isLoading || punchStatus === "break" || localStorage.getItem(`pms_tea_done_${new Date().toISOString().split("T")[0]}`) === "1" || (workSecondsAtLastScheduledBreakResume != null && workingSeconds - workSecondsAtLastScheduledBreakResume < 15 * 60)} className="text-left border border-[#00a99d] rounded-lg px-3 py-2 bg-[#fafafa] disabled:opacity-50 disabled:cursor-not-allowed">
+                  <span className="block text-sm font-semibold text-black">Tea Break</span>
+                  <span className="block text-right text-[#00897b] font-bold tabular-nums">{activeSeparateCard === "tea" && scheduledBreakRunning ? formatSecToMS(scheduledBreakRemaining) : "15:00"}</span>
+                </button>
+              </div>
+              <div className="flex justify-between text-xs font-semibold pt-1">
+                <span className="text-[#00897b]">Login : {punchStartTimeRef.current ? new Date(punchStartTimeRef.current).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+                <span className="text-red-600">Logout : —</span>
+              </div>
+              <button type="button" onClick={() => setShowEndConfirm(true)} disabled={isLoading} className="w-full bg-[#fff1f2] hover:bg-[#ffe4e6] text-[#dc2626] border border-[#fecdd3] rounded-lg py-2.5 font-bold text-sm">END WORK DAY</button>
+            </div>
+            <div className="hidden">
             <div className="grid grid-cols-2 gap-3 items-start">
               {/* ===== LEFT COLUMN: Clock, Location, Live Timers & End Work Day ===== */}
               <div className="space-y-2">
@@ -2086,6 +2176,8 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 </div>
               </div>
             </div>
+            </div>
+            </>
           ) : (
             /* Punch Status = 'out' */
             <div className="space-y-2.5" style={{ WebkitAppRegion: "no-drag" }}>
