@@ -251,20 +251,20 @@ async function createWindow() {
   if (fs.existsSync(buildIndex)) {
     try {
       const port = await startFallbackServer();
-      await mainWindow.loadURL(` http://15.135.216.211:5000/punch-widget`);
+      await mainWindow.loadURL(`http://13.211.179.187:3001/punch-widget`);
     } catch (e) {
       console.error("Fallback server error:", e);
       mainWindow
-        .loadURL(" http://15.135.216.211:5000/punch-widget")
+        .loadURL("http://13.211.179.187:3001/punch-widget")
         .catch(() => {});
     }
   } else {
     mainWindow
-      .loadURL(" http://15.135.216.211:5000/punch-widget")
+      .loadURL("http://13.211.179.187:3001/punch-widget")
       .catch(async () => {
         try {
           const port = await startFallbackServer();
-          await mainWindow.loadURL(` http://15.135.216.211:5000/punch-widget`);
+          await mainWindow.loadURL(`http://13.211.179.187:3001/punch-widget`);
         } catch (e) {
           console.error("Fallback server error:", e);
         }
