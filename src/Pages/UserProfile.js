@@ -18,7 +18,7 @@ function UserDetail() {
     const fetchUser = async () => {
       try {
         const token = localStorage.getItem("adminToken");
-        const res = await fetch(`https://pmsbackend.pixelmindsolutions.com/api/admin/getsingleuser/${userId}`, {
+        const res = await fetch(`http://16.178.180.174:3000/api/admin/getsingleuser/${userId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 

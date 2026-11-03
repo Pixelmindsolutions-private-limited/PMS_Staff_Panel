@@ -15,7 +15,7 @@ const CreateCategory = ({ onCategoryCreated }) => {
 
     try {
       const res = await axios.post(
-        'https://pmsbackend.pixelmindsolutions.com/api/admin/create-categories',
+        'http://16.178.180.174:3000/api/admin/create-categories',
         { categoryName }
       );
 

@@ -31,7 +31,7 @@ export default function VendorDetail() {
         setError("");
         const token = localStorage.getItem("adminToken");
 
-        const res = await fetch(`https://pmsbackend.pixelmindsolutions.com/api/admin/getvendor/${id}`, {
+        const res = await fetch(`http://16.178.180.174:3000/api/admin/getvendor/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 

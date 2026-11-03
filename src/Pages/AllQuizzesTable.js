@@ -3,7 +3,7 @@ import { utils, writeFile } from 'xlsx';
 import axios from 'axios';
 import { FaTrash } from 'react-icons/fa';
 
-const API = 'https://pmsbackend.pixelmindsolutions.com/api/admin';
+const API = 'http://16.178.180.174:3000/api/admin';
 
 const AllQuizzesTable = () => {
   const [quizzes, setQuizzes] = useState([]);

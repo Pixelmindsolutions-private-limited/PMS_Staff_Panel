@@ -58,7 +58,7 @@ function handleWidgetProtocol(rawUrl) {
       }
       const requestVersion = ++latestSyncRequest;
       const request = https.get(
-        `https://pmsbackend.pixelmindsolutions.com/login-sync/pending/${syncId}`,
+        `http://16.178.180.174:3000/login-sync/pending/${syncId}`,
         (response) => {
           let body = "";
           response.setEncoding("utf8");

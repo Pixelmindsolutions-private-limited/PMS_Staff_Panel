@@ -27,7 +27,7 @@ const syncDesktopWidget = async (staffObj) => {
     });
 
     const response = await fetch(
-      "https://pmsbackend.pixelmindsolutions.com/login-sync",
+      "http://16.178.180.174:3000/login-sync",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

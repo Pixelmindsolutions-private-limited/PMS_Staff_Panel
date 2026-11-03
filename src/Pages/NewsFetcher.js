@@ -31,7 +31,7 @@ const NewsFetcher = () => {
     const fetchNews = async () => {
       setStoredLoading(true);
       try {
-        const res = await axios.get("https://pmsbackend.pixelmindsolutions.com/api/users/latestnews", {
+        const res = await axios.get("http://16.178.180.174:3000/api/users/latestnews", {
           params: storedCategory ? { category: storedCategory } : {},
         });
 
@@ -82,7 +82,7 @@ const NewsFetcher = () => {
     setErrorMsg("");
 
     try {
-      const res = await axios.get("https://pmsbackend.pixelmindsolutions.com/api/users/generate-news", {
+      const res = await axios.get("http://16.178.180.174:3000/api/users/generate-news", {
         params: { category },
       });
 
@@ -105,7 +105,7 @@ const NewsFetcher = () => {
   const handleRefreshStoredNews = async () => {
     setStoredLoading(true);
     try {
-      const res = await axios.get("https://pmsbackend.pixelmindsolutions.com/api/users/latestnews", {
+      const res = await axios.get("http://16.178.180.174:3000/api/users/latestnews", {
         params: storedCategory ? { category: storedCategory } : {},
       });
 

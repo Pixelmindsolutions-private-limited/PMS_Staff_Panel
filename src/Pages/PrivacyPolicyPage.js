@@ -10,7 +10,7 @@ const PrivacyPolicyPage = () => {
   // ✅ Fetch the existing privacy policy (single object)
   useEffect(() => {
     axios
-      .get("https://pmsbackend.pixelmindsolutions.com/api/admin/privacy-policy")
+      .get("http://16.178.180.174:3000/api/admin/privacy-policy")
       .then((res) => {
         if (res.data.success && res.data.data) {
           setPolicy(res.data.data);
@@ -40,7 +40,7 @@ const PrivacyPolicyPage = () => {
       if (edited._id) {
         // Update
         const res = await axios.put(
-          `https://pmsbackend.pixelmindsolutions.com/api/admin/privacy-policy/${edited._id}`,
+          `http://16.178.180.174:3000/api/admin/privacy-policy/${edited._id}`,
           {
             title: edited.title,
             content: edited.content,
@@ -55,7 +55,7 @@ const PrivacyPolicyPage = () => {
         }
       } else {
         // Create
-        const res = await axios.post("https://pmsbackend.pixelmindsolutions.com/api/admin/privacy-policy", {
+        const res = await axios.post("http://16.178.180.174:3000/api/admin/privacy-policy", {
           title: edited.title,
           content: edited.content,
           date: edited.date,
@@ -78,7 +78,7 @@ const PrivacyPolicyPage = () => {
     if (!policy || !window.confirm("Are you sure you want to delete this policy?")) return;
     try {
       const res = await axios.delete(
-        `https://pmsbackend.pixelmindsolutions.com/api/admin/privacy-policy/${policy._id}`
+        `http://16.178.180.174:3000/api/admin/privacy-policy/${policy._id}`
       );
       if (res.data.success) {
         setPolicy(null);

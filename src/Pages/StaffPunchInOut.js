@@ -5,7 +5,7 @@ import {
   FiAlertCircle, FiDownload, FiBarChart2, FiCoffee, FiSun, FiZap,
 } from 'react-icons/fi';
 
-const API_BASE_URL = 'https://pmsbackend.pixelmindsolutions.com/api';
+const API_BASE_URL = 'http://16.178.180.174:3000/api';
 
 const StaffPunchInOut = () => {
   const navigate = useNavigate();

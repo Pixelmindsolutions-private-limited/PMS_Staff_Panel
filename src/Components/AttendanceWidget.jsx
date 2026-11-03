@@ -12,10 +12,10 @@ import {
   FiChevronDown,
 } from "react-icons/fi";
 
-const API_BASE_CANDIDATES = ["https://pmsbackend.pixelmindsolutions.com/api"];
+const API_BASE_CANDIDATES = ["http://16.178.180.174:3000/api"];
 
 export const getApiBaseUrl = () => {
-  return "https://pmsbackend.pixelmindsolutions.com/api";
+  return "http://16.178.180.174:3000/api";
 };
 
 export const getStoredStaffDetails = () => {

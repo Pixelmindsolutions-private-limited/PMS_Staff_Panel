@@ -11,7 +11,7 @@ import {
 } from 'react-icons/fi';
 import axios from 'axios';
 
-const API_BASE_URL = 'https://pmsbackend.pixelmindsolutions.com/api';
+const API_BASE_URL = 'http://16.178.180.174:3000/api';
 
 const AttendanceHistory = () => {
   const [sessions, setSessions] = useState([]);
