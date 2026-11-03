@@ -14,7 +14,7 @@ const RedeemedCouponsList = () => {
   useEffect(() => {
     const fetchCoupons = async () => {
       try {
-        const response = await fetch('http://16.178.180.174:3000/api/admin/userredeemedcouponhistory');
+        const response = await fetch('http://15.135.216.211:5000/api/admin/userredeemedcouponhistory');
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }

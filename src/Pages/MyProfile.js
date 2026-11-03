@@ -607,7 +607,7 @@ const style = `
   .error-container{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:20px;}
 `;
 
-const API_BASE = 'http://16.178.180.174:3000/api';
+const API_BASE = 'http://15.135.216.211:5000/api';
 
 const StaffMyProfile = () => {
   const [loading, setLoading] = useState(true);

@@ -31,7 +31,7 @@ export default function VendorDetail() {
         setError("");
         const token = localStorage.getItem("adminToken");
 
-        const res = await fetch(`http://16.178.180.174:3000/api/admin/getvendor/${id}`, {
+        const res = await fetch(`http://15.135.216.211:5000/api/admin/getvendor/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 

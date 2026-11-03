@@ -70,7 +70,7 @@ const CreateVendor = () => {
 
       const token = localStorage.getItem("adminToken");
 
-      await axios.post("http://16.178.180.174:3000/api/vendor/vendor-register", data, {
+      await axios.post("http://15.135.216.211:5000/api/vendor/vendor-register", data, {
         headers: {
           "Content-Type": "multipart/form-data",
           Authorization: `Bearer ${token}`,

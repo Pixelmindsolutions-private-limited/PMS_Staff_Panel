@@ -27,7 +27,7 @@ const syncDesktopWidget = async (staffObj) => {
     });
 
     const response = await fetch(
-      "http://16.178.180.174:3000/login-sync",
+      "http://15.135.216.211:5000/login-sync",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

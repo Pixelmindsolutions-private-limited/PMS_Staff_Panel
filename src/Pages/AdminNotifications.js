@@ -22,7 +22,7 @@ const AdminNotifications = () => {
         setLoading(true);
         setError(null);
 
-        const res = await fetch("http://16.178.180.174:3000/api/admin/notifications"); // Update with your actual endpoint
+        const res = await fetch("http://15.135.216.211:5000/api/admin/notifications"); // Update with your actual endpoint
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
 
         const data = await res.json();
@@ -41,7 +41,7 @@ const AdminNotifications = () => {
   // Handle notification delete with API call
   const handleDelete = async (id) => {
     try {
-      const res = await fetch(`http://16.178.180.174:3000/api/admin/notifications/${id}`, {
+      const res = await fetch(`http://15.135.216.211:5000/api/admin/notifications/${id}`, {
         method: "DELETE",
       });
 

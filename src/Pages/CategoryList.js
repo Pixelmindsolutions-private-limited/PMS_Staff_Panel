@@ -3,7 +3,7 @@ import { FaEdit, FaTrash } from 'react-icons/fa';
 import { utils, writeFile } from 'xlsx';
 import axios from 'axios';
 
-const API_BASE = 'http://16.178.180.174:3000/api/admin';
+const API_BASE = 'http://15.135.216.211:5000/api/admin';
 
 export default function CategoryList() {
   const [categories, setCategories] = useState([]);

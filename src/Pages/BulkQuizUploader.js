@@ -18,7 +18,7 @@ const BulkQuizUploader = () => {
         return;
       }
 
-      const res = await fetch("http://16.178.180.174:3000/api/admin/add-bulkquizzes", {
+      const res = await fetch("http://15.135.216.211:5000/api/admin/add-bulkquizzes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(jsonData),

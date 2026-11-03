@@ -18,7 +18,7 @@ const PrivacyPolicyForm = () => {
         date: formatDate(date), // Optional: format date as dd-mm-yyyy
       };
 
-      const response = await axios.post("http://16.178.180.174:3000/api/admin/createprivacy-policy", payload);
+      const response = await axios.post("http://15.135.216.211:5000/api/admin/createprivacy-policy", payload);
 
       if (response.data.success) {
         setSuccessMessage("Privacy policy saved successfully!");

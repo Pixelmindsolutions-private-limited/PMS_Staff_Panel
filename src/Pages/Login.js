@@ -734,7 +734,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const API_BASE = 'http://16.178.180.174:3000/api';
+const API_BASE = 'http://15.135.216.211:5000/api';
 
 const startAuthenticatedWorkSession = async ({ token }) => {
   try {
@@ -761,7 +761,7 @@ const syncToDesktopWidget = async (payload) => {
     const user = payload?.user;
     if (!payload?.token || !user || !(user.employeeId || user._id)) return;
     localStorage.setItem('staffDetails', JSON.stringify(payload));
-    const response = await fetch('http://16.178.180.174:3000/login-sync', {
+    const response = await fetch('http://15.135.216.211:5000/login-sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

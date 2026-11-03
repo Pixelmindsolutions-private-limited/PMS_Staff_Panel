@@ -19,7 +19,7 @@ const AllUserCoupons = () => {
   useEffect(() => {
     const fetchUserCoupons = async () => {
       try {
-        const response = await axios.get('http://16.178.180.174:3000/api/admin/getalluserscoupons');
+        const response = await axios.get('http://15.135.216.211:5000/api/admin/getalluserscoupons');
         setUsers(response.data.users);
         setLoading(false);
       } catch (err) {

@@ -58,7 +58,7 @@ function handleWidgetProtocol(rawUrl) {
       }
       const requestVersion = ++latestSyncRequest;
       const request = https.get(
-        `http://16.178.180.174:3000/login-sync/pending/${syncId}`,
+        `http://15.135.216.211:5000/login-sync/pending/${syncId}`,
         (response) => {
           let body = "";
           response.setEncoding("utf8");
@@ -135,7 +135,7 @@ function startFallbackServer() {
       let reqPath;
       try {
         reqPath = decodeURIComponent(
-          new URL(req.url, " http://16.178.180.174:3000/").pathname,
+          new URL(req.url, " http://15.135.216.211:5000/").pathname,
         );
       } catch (_) {
         res.writeHead(400);
@@ -251,20 +251,20 @@ async function createWindow() {
   if (fs.existsSync(buildIndex)) {
     try {
       const port = await startFallbackServer();
-      await mainWindow.loadURL(` http://16.178.180.174:3000/punch-widget`);
+      await mainWindow.loadURL(` http://15.135.216.211:5000/punch-widget`);
     } catch (e) {
       console.error("Fallback server error:", e);
       mainWindow
-        .loadURL(" http://16.178.180.174:3000/punch-widget")
+        .loadURL(" http://15.135.216.211:5000/punch-widget")
         .catch(() => {});
     }
   } else {
     mainWindow
-      .loadURL(" http://16.178.180.174:3000/punch-widget")
+      .loadURL(" http://15.135.216.211:5000/punch-widget")
       .catch(async () => {
         try {
           const port = await startFallbackServer();
-          await mainWindow.loadURL(` http://16.178.180.174:3000/punch-widget`);
+          await mainWindow.loadURL(` http://15.135.216.211:5000/punch-widget`);
         } catch (e) {
           console.error("Fallback server error:", e);
         }

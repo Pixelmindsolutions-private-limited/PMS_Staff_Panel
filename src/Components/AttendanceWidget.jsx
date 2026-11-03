@@ -12,10 +12,10 @@ import {
   FiChevronDown,
 } from "react-icons/fi";
 
-const API_BASE_CANDIDATES = ["http://16.178.180.174:3000/api"];
+const API_BASE_CANDIDATES = ["http://15.135.216.211:5000/api"];
 
 export const getApiBaseUrl = () => {
-  return "http://16.178.180.174:3000/api";
+  return "http://15.135.216.211:5000/api";
 };
 
 export const getStoredStaffDetails = () => {

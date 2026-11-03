@@ -16,7 +16,7 @@ export default function VendorDocumentList() {
   useEffect(() => {
     const fetchDocs = async () => {
       try {
-        const res = await fetch("http://16.178.180.174:3000/api/admin/allvendordocs");
+        const res = await fetch("http://15.135.216.211:5000/api/admin/allvendordocs");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         setVendorDocs(json.data || []);

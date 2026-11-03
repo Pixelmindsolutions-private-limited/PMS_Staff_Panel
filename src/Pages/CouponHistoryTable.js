@@ -8,7 +8,7 @@ const CouponHistoryTable = () => {
   useEffect(() => {
     const fetchCouponHistory = async () => {
       try {
-        const response = await fetch("http://16.178.180.174:3000/api/admin/userusage-couponhistory");
+        const response = await fetch("http://15.135.216.211:5000/api/admin/userusage-couponhistory");
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }

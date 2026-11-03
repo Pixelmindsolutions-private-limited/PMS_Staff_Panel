@@ -15,7 +15,7 @@ const CreateCategory = ({ onCategoryCreated }) => {
 
     try {
       const res = await axios.post(
-        'http://16.178.180.174:3000/api/admin/create-categories',
+        'http://15.135.216.211:5000/api/admin/create-categories',
         { categoryName }
       );
 

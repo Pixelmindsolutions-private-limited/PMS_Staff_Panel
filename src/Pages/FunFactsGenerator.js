@@ -26,7 +26,7 @@ const FunFactsGenerator = () => {
         const fetchStoredFacts = async () => {
             setStoredLoading(true);
             try {
-                const res = await axios.get("http://16.178.180.174:3000/api/users/funfacts", {
+                const res = await axios.get("http://15.135.216.211:5000/api/users/funfacts", {
                     params: storedCategory ? { category: storedCategory } : {},
                 });
 
@@ -77,7 +77,7 @@ const FunFactsGenerator = () => {
         setErrorMsg("");
 
         try {
-            const res = await axios.get("http://16.178.180.174:3000/api/users/generate-facts", {
+            const res = await axios.get("http://15.135.216.211:5000/api/users/generate-facts", {
                 params: { category },
             });
 
@@ -114,7 +114,7 @@ const FunFactsGenerator = () => {
     const handleRefreshStoredFacts = async () => {
         setStoredLoading(true);
         try {
-            const res = await axios.get("http://16.178.180.174:3000/api/users/funfacts", {
+            const res = await axios.get("http://15.135.216.211:5000/api/users/funfacts", {
                 params: storedCategory ? { category: storedCategory } : {},
             });
 
