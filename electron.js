@@ -57,7 +57,7 @@ function handleWidgetProtocol(rawUrl) {
         return;
       }
       const requestVersion = ++latestSyncRequest;
-      const request = https.get(
+      const request = http.get(
         `http://15.135.216.211:5000/login-sync/pending/${syncId}`,
         (response) => {
           let body = "";
