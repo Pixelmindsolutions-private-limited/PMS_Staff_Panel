@@ -26,11 +26,11 @@ export const getStoredStaffDetails = () => {
       if (parsed?.token && parsed?.user) {
         try {
           localStorage.setItem("staffDetails", rawSession);
-        } catch (_) { }
+        } catch (_) {}
         return parsed;
       }
     }
-  } catch (_) { }
+  } catch (_) {}
 
   try {
     const rawLocal = localStorage.getItem("staffDetails");
@@ -40,7 +40,7 @@ export const getStoredStaffDetails = () => {
         return parsed;
       }
     }
-  } catch (_) { }
+  } catch (_) {}
   return null;
 };
 
@@ -102,6 +102,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   const [scheduledBreakElapsed, setScheduledBreakElapsed] = useState(0);
   const [scheduledBreakRemaining, setScheduledBreakRemaining] = useState(0);
 
+  // Prevent idle detection while hovering over the Delay section
+  const isLogoutHoveredRef = useRef(false);
+
   // Recorded Break Times for Today
   const [lunchTakenSec, setLunchTakenSec] = useState(() => {
     try {
@@ -119,10 +122,15 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       return 0;
     }
   });
-  const [workSecondsAtLastScheduledBreakResume, setWorkSecondsAtLastScheduledBreakResume] = useState(() => {
+  const [
+    workSecondsAtLastScheduledBreakResume,
+    setWorkSecondsAtLastScheduledBreakResume,
+  ] = useState(() => {
     try {
       const todayStr = new Date().toISOString().split("T")[0];
-      const saved = localStorage.getItem(`pms_scheduled_break_resume_${todayStr}`);
+      const saved = localStorage.getItem(
+        `pms_scheduled_break_resume_${todayStr}`,
+      );
       return saved == null ? null : Number(saved);
     } catch (_) {
       return 0;
@@ -170,12 +178,15 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   };
 
   // Dynamically adapt Electron window height based on current card view
+  // Dynamically resize Electron window
   useEffect(() => {
-    if (typeof window !== "undefined" && window.electronAPI?.setHeight) {
+    if (typeof window === "undefined") return;
+
+    if (window.electronAPI?.setSize) {
       if (isCardMinimized) {
-        window.electronAPI.setHeight(75);
+        window.electronAPI.setSize(540, 75);
       } else if (punchStatus === "out") {
-        window.electronAPI.setHeight(280);
+        window.electronAPI.setSize(540, 420);
       } else if (
         activeSeparateCard === "lunch" ||
         activeSeparateCard === "tea"
@@ -184,9 +195,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           (activeSeparateCard === "lunch" && showLunchFinished) ||
           (activeSeparateCard === "tea" && showTeaFinished);
 
-        window.electronAPI.setHeight(showFinishedBanner ? 620 : 420);
+        window.electronAPI.setSize(540, showFinishedBanner ? 500 : 420);
       } else {
-        window.electronAPI.setHeight(900);
+        window.electronAPI.setSize(540, 420);
       }
     }
   }, [
@@ -286,7 +297,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           timestamp: Date.now(),
         });
       }
-    } catch (_) { }
+    } catch (_) {}
   };
 
   // Keep a ref copy of delay so intervals/handlers always send the latest value.
@@ -340,7 +351,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             setBreakRemainingSec(Math.max(0, rem));
           }
         }
-      } catch (_) { }
+      } catch (_) {}
     },
     [apiCall],
   );
@@ -373,12 +384,12 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         setLunchTakenSec(elapsed);
         try {
           localStorage.setItem(`pms_lunch_taken_${todayStr}`, String(elapsed));
-        } catch (_) { }
+        } catch (_) {}
       } else if (activeSeparateCard === "tea") {
         setTeaTakenSec(elapsed);
         try {
           localStorage.setItem(`pms_tea_taken_${todayStr}`, String(elapsed));
-        } catch (_) { }
+        } catch (_) {}
       }
 
       // One-shot completion notice per break instance
@@ -419,7 +430,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             `pms_custom_breaks_${todayStr}`,
             JSON.stringify(next),
           );
-        } catch (_) { }
+        } catch (_) {}
         return next;
       });
     }
@@ -504,7 +515,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                   `pms_lunch_taken_${todayStr}`,
                   String(lunchSec),
                 );
-              } catch (_) { }
+              } catch (_) {}
             }
             if (teaSec > 0) {
               setTeaTakenSec(teaSec);
@@ -513,7 +524,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                   `pms_tea_taken_${todayStr}`,
                   String(teaSec),
                 );
-              } catch (_) { }
+              } catch (_) {}
             }
             if (customs.length > 0) {
               setCustomBreaksList(customs);
@@ -522,7 +533,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                   `pms_custom_breaks_${todayStr}`,
                   JSON.stringify(customs),
                 );
-              } catch (_) { }
+              } catch (_) {}
             }
           }
 
@@ -583,7 +594,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                   const endMs = currentBreak.expectedEndTime
                     ? new Date(currentBreak.expectedEndTime).getTime()
                     : startMs +
-                    (scheduledType === "lunch" ? 45 : 15) * 60 * 1000;
+                      (scheduledType === "lunch" ? 45 : 15) * 60 * 1000;
 
                   scheduledBreakStartMsRef.current = startMs;
                   scheduledBreakEndMsRef.current = endMs;
@@ -717,8 +728,8 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       if (!user.employeeId) return null;
       setStaffDetails((prev) =>
         prev &&
-          prev.employeeId === user.employeeId &&
-          prev.employeeName === user.employeeName
+        prev.employeeId === user.employeeId &&
+        prev.employeeName === user.employeeName
           ? prev
           : user,
       );
@@ -747,7 +758,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           if (d) refreshStatus(d.token, d.user.employeeId);
         }
       };
-    } catch (_) { }
+    } catch (_) {}
 
     // Login/logout done in another window of the same origin.
     const onStorage = (e) => {
@@ -927,23 +938,29 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       // times across a sleep; only absolute timestamps are reliable.
       recalcBreakTimers();
 
-      // If working normally (not on scheduled break card):
       if (punchStatus === "in" && activeSeparateCard === null) {
-        const idleForSec = (Date.now() - lastActivityTimeRef.current) / 1000;
+        // Always increment Working Time
+        setWorkingSeconds((prev) => prev + 1);
 
-        if (idleForSec >= 120) {
-          // Enter idle once. Do not let this timer auto-resume the session.
-          if (!isCurrentlyIdleRef.current) {
-            isCurrentlyIdleRef.current = true;
-            idleStartedAtRef.current = lastActivityTimeRef.current;
-            setIsCurrentlyIdle(true);
-            setShowIdleModal(true);
-            // Tell the backend right away that the delay has started.
-            reportDelayRef.current?.({ event: "idle_started" });
+        // Only pause idle detection while hovering
+        if (isLogoutHoveredRef.current) {
+          lastActivityTimeRef.current = Date.now();
+        } else {
+          const idleForSec = (Date.now() - lastActivityTimeRef.current) / 1000;
+
+          if (idleForSec >= 120) {
+            if (!isCurrentlyIdleRef.current) {
+              isCurrentlyIdleRef.current = true;
+              idleStartedAtRef.current = lastActivityTimeRef.current;
+
+              setIsCurrentlyIdle(true);
+              setShowIdleModal(true);
+
+              reportDelayRef.current?.({ event: "idle_started" });
+            }
+
+            setDelaySeconds((prev) => prev + 1);
           }
-          setDelaySeconds((prev) => prev + 1);
-        } else if (!isCurrentlyIdleRef.current) {
-          setWorkingSeconds((prev) => prev + 1);
         }
       }
     }, 1000);
@@ -1037,8 +1054,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           isIdle: false,
           activityType: "human",
           delaySeconds: delaySecondsRef.current,
-          delayMinutes:
-            Math.round((delaySecondsRef.current / 60) * 100) / 100,
+          delayMinutes: Math.round((delaySecondsRef.current / 60) * 100) / 100,
           idleDurationSeconds: idleStartedAtRef.current
             ? Math.floor((Date.now() - idleStartedAtRef.current) / 1000)
             : undefined,
@@ -1155,17 +1171,23 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   const handleStartScheduledBreak = async (type, durationMin) => {
     if (isLoading) return;
     const todayStr = new Date().toISOString().split("T")[0];
-    const doneToday = localStorage.getItem(`pms_${type}_done_${todayStr}`) === "1";
+    const doneToday =
+      localStorage.getItem(`pms_${type}_done_${todayStr}`) === "1";
     if (doneToday) {
-      setError(`${type === "tea" ? "Tea" : "Lunch"} break has already been taken today.`);
+      setError(
+        `${type === "tea" ? "Tea" : "Lunch"} break has already been taken today.`,
+      );
       return;
     }
-    const workAfterBreakSec = workSecondsAtLastScheduledBreakResume == null
-      ? Infinity
-      : Math.max(0, workingSeconds - workSecondsAtLastScheduledBreakResume);
+    const workAfterBreakSec =
+      workSecondsAtLastScheduledBreakResume == null
+        ? Infinity
+        : Math.max(0, workingSeconds - workSecondsAtLastScheduledBreakResume);
     if (workAfterBreakSec < 15 * 60) {
       const remainingMinutes = Math.ceil((15 * 60 - workAfterBreakSec) / 60);
-      setError(`Please work for ${remainingMinutes} more minute${remainingMinutes === 1 ? "" : "s"} before starting another break.`);
+      setError(
+        `Please work for ${remainingMinutes} more minute${remainingMinutes === 1 ? "" : "s"} before starting another break.`,
+      );
       return;
     }
     setIsLoading(true);
@@ -1254,8 +1276,11 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       setPunchStatus("in");
       setWorkSecondsAtLastScheduledBreakResume(workingSeconds);
       try {
-        localStorage.setItem(`pms_scheduled_break_resume_${todayStr}`, String(workingSeconds));
-      } catch (_) { }
+        localStorage.setItem(
+          `pms_scheduled_break_resume_${todayStr}`,
+          String(workingSeconds),
+        );
+      } catch (_) {}
 
       try {
         localStorage.setItem(`pms_${breakType}_done_${todayStr}`, "1");
@@ -1263,7 +1288,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           `pms_${breakType}_taken_${todayStr}`,
           String(actualSeconds),
         );
-      } catch (_) { }
+      } catch (_) {}
       if (breakType === "lunch") setLunchTakenSec(actualSeconds);
       else setTeaTakenSec(actualSeconds);
 
@@ -1339,7 +1364,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             `pms_custom_breaks_${todayStr}`,
             JSON.stringify(next),
           );
-        } catch (_) { }
+        } catch (_) {}
         return next;
       });
 
@@ -1376,13 +1401,13 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         const next = prev.map((item) =>
           item.status === "active"
             ? {
-              ...item,
-              status: "ended",
-              startTime: breakRecord?.startTime || item.startTime,
-              endTime: breakRecord?.endTime || new Date().toISOString(),
-              duration: breakRecord?.duration ?? item.duration,
-              takenSec: actualSeconds,
-            }
+                ...item,
+                status: "ended",
+                startTime: breakRecord?.startTime || item.startTime,
+                endTime: breakRecord?.endTime || new Date().toISOString(),
+                duration: breakRecord?.duration ?? item.duration,
+                takenSec: actualSeconds,
+              }
             : item,
         );
         try {
@@ -1390,7 +1415,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             `pms_custom_breaks_${todayStr}`,
             JSON.stringify(next),
           );
-        } catch (_) { }
+        } catch (_) {}
         return next;
       });
 
@@ -1445,6 +1470,27 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // ================= Confirmation Modal functions =================
+
+  const [showBreakConfirm, setShowBreakConfirm] = useState(false);
+  const [selectedBreakType, setSelectedBreakType] = useState(null);
+
+  const handleBreakClick = (breakType) => {
+    setSelectedBreakType(breakType);
+    setShowBreakConfirm(true);
+  };
+
+  const confirmBreak = () => {
+    if (selectedBreakType === "lunch") {
+      handleStartScheduledBreak("lunch", 45);
+    } else if (selectedBreakType === "tea") {
+      handleStartScheduledBreak("tea", 15);
+    }
+
+    setShowBreakConfirm(false);
+    setSelectedBreakType(null);
   };
 
   // ================= RESPONSIVE UI HELPERS (Tailwind only) =================
@@ -1539,9 +1585,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     staffDetails?.fullName ||
     "";
   const staffLabel =
-    staffDisplayName ||
-    employeeId ||
-    (authToken ? "Staff" : "Please log in");
+    staffDisplayName || employeeId || (authToken ? "Staff" : "Please log in");
 
   const todayKey = new Date().toISOString().split("T")[0];
   const scheduledBreakBlocked =
@@ -1549,46 +1593,72 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     workingSeconds - workSecondsAtLastScheduledBreakResume < 15 * 60;
 
   // ================= COMPACT (MINIMIZED) CARD =================
+
   if (isCardMinimized) {
     return (
       <div
-        className="bg-white rounded-2xl border border-slate-200 shadow-2xl px-3 sm:px-3.5 py-2 w-full max-w-sm mx-auto flex items-center justify-between gap-2 select-none animate-slide-in font-sans"
-        style={{ backgroundColor: "#ffffff", WebkitAppRegion: "drag" }}
+        className="w-[540px] min-w-[540px] max-w-[540px] h-[75px] mx-auto bg-white border border-slate-200 shadow-md rounded-2xl px-3 flex items-center justify-between gap-2 overflow-hidden font-sans"
+        style={{
+          backgroundColor: "#ffffff",
+          WebkitAppRegion: "no-drag",
+        }}
       >
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+        {/* Left: Logo and Status */}
+        <div className="flex items-center gap-2 min-w-0 shrink-0">
           <img
             src="/pms_logo.png"
             alt="PMS"
-            className="w-5 h-5 object-contain rounded shrink-0"
+            className="w-8 h-8 object-contain shrink-0"
           />
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-          <span className="font-syne font-bold text-teal-900 text-[11px] sm:text-xs tabular-nums whitespace-nowrap">
+
+          <div className="flex flex-col min-w-0">
+            <span className="text-[11px] font-extrabold text-teal-900 whitespace-nowrap">
+              Pixelmind
+            </span>
+
+            <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Working
+            </span>
+          </div>
+        </div>
+
+        {/* Center: Clock */}
+        <div className="flex flex-col items-center justify-center min-w-0 flex-1">
+          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">
+            Current Time
+          </span>
+
+          <span className="text-sm font-extrabold text-slate-800 tabular-nums whitespace-nowrap">
             {currentTime.toLocaleTimeString("en-US", {
               hour: "2-digit",
               minute: "2-digit",
               second: "2-digit",
             })}
           </span>
-          <span className="text-[10px] font-semibold text-slate-500 truncate">
-            Work:{" "}
-            <span className="font-bold text-teal-700 tabular-nums">
-              {formatSecToHMS(workingSeconds)}
-            </span>
+        </div>
+
+        {/* Working Time */}
+        <div className="flex flex-col items-center justify-center shrink-0 px-2 border-l border-slate-100">
+          <span className="text-[9px] font-semibold text-slate-400 whitespace-nowrap">
+            Working Time
+          </span>
+
+          <span className="text-sm font-extrabold text-teal-700 tabular-nums whitespace-nowrap">
+            {formatSecToHMS(workingSeconds)}
           </span>
         </div>
-        <div
-          className="flex items-center gap-1 shrink-0"
+
+        {/* Expand Button */}
+        <button
+          type="button"
+          onClick={handleMaximizeOrToggle}
+          title="Expand Attendance Widget"
+          className="w-8 h-8 shrink-0 rounded-lg border border-slate-200 bg-slate-50 hover:bg-teal-50 hover:border-teal-300 text-slate-600 hover:text-teal-700 flex items-center justify-center transition-all cursor-pointer"
           style={{ WebkitAppRegion: "no-drag" }}
         >
-          <button
-            type="button"
-            onClick={handleMaximizeOrToggle}
-            title="Expand Full Card"
-            className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-all border border-slate-200 cursor-pointer"
-          >
-            <span className="w-2.5 h-2.5 border-[1.5px] border-slate-700 rounded-[2px] block"></span>
-          </button>
-        </div>
+          <FiExternalLink size={15} />
+        </button>
       </div>
     );
   }
@@ -1805,7 +1875,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       {/* ============================================================== */}
       {activeSeparateCard === null && (
         <div
-          className="bg-white rounded-[clamp(18px,2.5vw,28px)] border border-slate-200/90 shadow-[0_12px_35px_rgba(1,87,84,0.08)] p-3 min-[481px]:p-[clamp(14px,2.2vw,32px)] max-w-[1440px] w-full mx-auto relative overflow-visible transition-all font-sans"
+          className="bg-white rounded-[clamp(18px,2.5vw,28px)] border border-slate-200/90 shadow-[0_12px_35px_rgba(1,87,84,0.08)] p-3 min-[481px]:p-[clamp(14px,2.2vw,32px)] w-full h-full max-w-[520px] mx-auto overflow-hidden relative overflow-visible transition-all font-sans"
           style={{ backgroundColor: "#ffffff" }}
         >
           {!(punchStatus === "in" || punchStatus === "break") && (
@@ -1851,10 +1921,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
           {/* ================= WORKING / ON-BREAK DASHBOARD ================= */}
           {punchStatus === "in" || punchStatus === "break" ? (
-            <div
-              className="flex flex-col gap-3 min-[481px]:gap-[clamp(12px,2.2vh,28px)] px-1 sm:px-3 pb-3"
-              style={{ WebkitAppRegion: "no-drag" }}
-            >
+            <div className="flex flex-col gap-2 px-1 pb-1">
               {/* Window Controls */}
               <div
                 className="absolute right-3 top-3 sm:right-6 sm:top-6 lg:right-8 lg:top-8 z-10"
@@ -1868,19 +1935,22 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 <img
                   src="/pms_logo_long_dark.png"
                   alt="Pixelmind Solutions"
-                  className="w-full h-[clamp(48px,8vw,96px)] object-contain"
+                  className="w-full h-12 object-contain"
                 />
               </div>
 
               {/* Employee details */}
-              <div className="w-fit max-w-full self-center -mt-1 rounded-xl border border-[#d9e8e6] bg-[#f8fbfb] px-3 py-2 shadow-sm">
-                <div className="flex min-w-0 flex-wrap items-center justify-center gap-2">
-                  <span className="min-w-0 max-w-full truncate text-[clamp(12px,1.5vw,20px)] font-bold text-[#0f2e2e]">
-                    {staffLabel}
-                  </span>
+              <div className="w-full max-w-full self-center -mt-1 rounded-xl border border-[#d9e8e6] bg-[#f8fbfb] px-3 py-2 shadow-sm">
+                <div className="flex min-w-0 items-center justify-between gap-3">
+                  <div className="font-bold">
+                    Name:{" "}
+                    <span className="min-w-0 truncate text-sm font-bold text-[#00897b] sm:text-base">
+                      {staffLabel}
+                    </span>
+                  </div>
 
                   {staffDisplayName && employeeId ? (
-                    <span className="shrink-0 whitespace-nowrap rounded-full border border-[#d9e8e6] bg-white px-2 py-0.5 text-[10px] font-semibold text-[#015754] sm:text-xs">
+                    <span className="shrink-0 whitespace-nowrap rounded-full border border-[#d9e8e6] bg-white px-2.5 py-1 text-[10px] font-bold text-[#00897b] sm:text-xs">
                       ID: {employeeId}
                     </span>
                   ) : null}
@@ -1888,23 +1958,35 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
               </div>
 
               {/* Working Time */}
-              <div className="rounded-[clamp(14px,1.6vw,20px)] border border-[#b9e4df] bg-[#e6f5f3] px-3 sm:px-4 py-[clamp(12px,2.1vw,28px)] text-center shadow-[0_4px_12px_rgba(1,87,84,0.04)]">
+              <div className="rounded-xl border border-[#b9e4df] bg-[#e6f5f3] px-2 py-2 text-center">
                 <div className="text-[clamp(13px,1.5vw,22px)] font-bold text-slate-600 mb-1.5 sm:mb-2">
                   Working Time
                 </div>
-                <div className="text-[clamp(26px,3.4vw,48px)] leading-[1.15] font-extrabold text-[#015754] tabular-nums tracking-tight break-words">
+                <div className="text-3xl leading-tight font-extrabold text-[#015754] tabular-nums tracking-tight">
                   {formatSecToHMS(workingSeconds)}
                 </div>
               </div>
 
               {/* Delay Time | Lunch Break | Tea Break */}
-              <div className="grid grid-cols-3 gap-[clamp(6px,2vw,24px)] w-full">
+              <div className="grid grid-cols-3 gap-2 w-full">
                 {/* Delay Time */}
-                <div className="min-w-0 rounded-[clamp(14px,1.6vw,20px)] border border-red-100 bg-[#fff5f5] px-1.5 sm:px-2 py-[clamp(12px,2.1vw,28px)] text-center">
-                  <div className="text-[clamp(11px,1.5vw,22px)] font-semibold text-slate-600 mb-2 sm:mb-3">
-                    Delay Time
+                <div className="min-w-0 rounded-xl border border-red-100 bg-[#fff5f5] px-1 py-2 text-center">
+                  <div className="text-xs font-semibold text-slate-600 mb-2 sm:mb-3">
+                    Delay{" "}
+                    <span
+                      onMouseEnter={() => {
+                        isLogoutHoveredRef.current = true;
+                        lastActivityTimeRef.current = Date.now();
+                      }}
+                      onMouseLeave={() => {
+                        isLogoutHoveredRef.current = false;
+                        lastActivityTimeRef.current = Date.now();
+                      }}
+                    >
+                      Time
+                    </span>
                   </div>
-                  <div className="text-[clamp(13px,2.2vw,30px)] font-extrabold text-red-600 tabular-nums tracking-tight break-words">
+                  <div className="text-sm font-extrabold text-red-600 tabular-nums tracking-tight break-words">
                     {formatSecToHMS(delaySeconds)}
                   </div>
                 </div>
@@ -1912,19 +1994,20 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 {/* Lunch Break */}
                 <button
                   type="button"
-                  onClick={() => handleStartScheduledBreak("lunch", 45)}
-                  disabled={
-                    isLoading ||
-                    punchStatus === "break" ||
-                    localStorage.getItem(`pms_lunch_done_${todayKey}`) === "1" ||
-                    scheduledBreakBlocked
-                  }
-                  className="min-w-0 rounded-[clamp(14px,1.6vw,20px)] border border-[#b9e4df] bg-[#f0fbf9] px-1.5 sm:px-2 py-[clamp(12px,2.1vw,28px)] text-center hover:bg-[#e2f5f2] enabled:hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  onClick={() => handleBreakClick("lunch")}
+                  // disabled={
+                  //   isLoading ||
+                  //   punchStatus === "break" ||
+                  //   localStorage.getItem(`pms_lunch_done_${todayKey}`) ===
+                  //     "1" ||
+                  //   scheduledBreakBlocked
+                  // }
+                  className="min-w-0 rounded-xl border border-[#b9e4df] bg-[#f0fbf9] px-1 py-2 text-center"
                 >
-                  <span className="block text-[clamp(11px,1.5vw,22px)] font-semibold text-slate-600 mb-2 sm:mb-3">
+                  <span className="block text-xs font-semibold text-slate-600 mb-2 sm:mb-3">
                     Lunch Break
                   </span>
-                  <span className="block text-[clamp(13px,2.2vw,30px)] font-extrabold text-[#00897b] tabular-nums tracking-tight break-words">
+                  <span className="block text-sm font-extrabold text-[#00897b] tabular-nums tracking-tight break-words">
                     {activeSeparateCard === "lunch" && scheduledBreakRunning
                       ? formatSecToMS(scheduledBreakRemaining)
                       : "45:00"}
@@ -1934,19 +2017,19 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 {/* Tea Break */}
                 <button
                   type="button"
-                  onClick={() => handleStartScheduledBreak("tea", 15)}
-                  disabled={
-                    isLoading ||
-                    punchStatus === "break" ||
-                    localStorage.getItem(`pms_tea_done_${todayKey}`) === "1" ||
-                    scheduledBreakBlocked
-                  }
-                  className="min-w-0 rounded-[clamp(14px,1.6vw,20px)] border border-[#b9e4df] bg-[#f0fbf9] px-1.5 sm:px-2 py-[clamp(12px,2.1vw,28px)] text-center hover:bg-[#e2f5f2] enabled:hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  onClick={() => handleBreakClick("tea")}
+                  // disabled={
+                  //   isLoading ||
+                  //   punchStatus === "break" ||
+                  //   localStorage.getItem(`pms_tea_done_${todayKey}`) === "1" ||
+                  //   scheduledBreakBlocked
+                  // }
+                  className="min-w-0 rounded-xl border border-[#b9e4df] bg-[#f0fbf9] px-1 py-2 text-center"
                 >
-                  <span className="block text-[clamp(11px,1.5vw,22px)] font-semibold text-slate-600 mb-2 sm:mb-3">
+                  <span className="block text-xs font-semibold text-slate-600 mb-2 sm:mb-3">
                     Tea Break
                   </span>
-                  <span className="block text-[clamp(13px,2.2vw,30px)] font-extrabold text-[#00897b] tabular-nums tracking-tight break-words">
+                  <span className="block text-sm font-extrabold text-[#00897b] tabular-nums tracking-tight break-words">
                     {activeSeparateCard === "tea" && scheduledBreakRunning
                       ? formatSecToMS(scheduledBreakRemaining)
                       : "15:00"}
@@ -1955,17 +2038,25 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
               </div>
 
               {/* Login / Logout */}
-              <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-1 border-t border-gray-200 pt-3 text-[clamp(12px,1.5vw,20px)] font-medium">
-                <span className="text-[#00897b]">
-                  Login :{" "}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 pt-3">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-sm font-semibold text-[#00897b]">
+                  <span className="h-2 w-2 rounded-full bg-teal-500" />
+                  Login:
                   {punchStartTimeRef.current
-                    ? new Date(punchStartTimeRef.current).toLocaleTimeString("en-US", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
+                    ? new Date(punchStartTimeRef.current).toLocaleTimeString(
+                        "en-US",
+                        {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        },
+                      )
                     : "—"}
                 </span>
-                <span className="text-red-600">Logout : —</span>
+
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-600">
+                  <span className="h-2 w-2 rounded-full bg-red-500" />
+                  Logout: —
+                </span>
               </div>
 
               {/* End Work Day */}
@@ -1973,10 +2064,54 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 type="button"
                 onClick={() => setShowEndConfirm(true)}
                 disabled={isLoading}
-                className="w-full py-[clamp(10px,2vh,20px)] text-[clamp(14px,2vw,26px)] rounded-[18px] bg-[#fff1f2] hover:bg-[#ffe4e6] text-[#dc2626] border border-slate-200 font-extrabold transition-all enabled:hover:-translate-y-px disabled:opacity-50"
+                className="w-full py-2.5 text-sm rounded-xl bg-[#fff1f2] hover:bg-[#ffe4e6] text-[#dc2626] border border-slate-200 font-extrabold transition-all"
               >
                 END WORK DAY
               </button>
+
+              {showBreakConfirm && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                  <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 animate-in fade-in zoom-in duration-200">
+                    <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
+                      <span className="text-3xl">
+                        {selectedBreakType === "lunch" ? "🍱" : "☕"}
+                      </span>
+                    </div>
+
+                    <h3 className="text-lg font-bold text-gray-800 text-center">
+                      Confirm{" "}
+                      {selectedBreakType === "lunch"
+                        ? "Lunch Break"
+                        : "Tea Break"}
+                      ?
+                    </h3>
+
+                    <p className="text-sm text-gray-500 text-center mt-2 mb-6">
+                      Are you sure you want to start your{" "}
+                      {selectedBreakType === "lunch" ? "lunch" : "tea"} break?
+                    </p>
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => {
+                          setShowBreakConfirm(false);
+                          setSelectedBreakType(null);
+                        }}
+                        className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-all"
+                      >
+                        Cancel
+                      </button>
+
+                      <button
+                        onClick={confirmBreak}
+                        className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm shadow-lg shadow-teal-500/20 transition-all"
+                      >
+                        Yes, Start Break
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             /* Punch Status = 'out' */
@@ -2060,7 +2195,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                       )}
                     </span>
                   </div>
-                  <div className="text-slate-400 hidden min-[360px]:block">•</div>
+                  <div className="text-slate-400 hidden min-[360px]:block">
+                    •
+                  </div>
                   <div className="text-slate-500 font-medium">
                     Remaining:{" "}
                     <span className="font-bold font-syne tabular-nums text-slate-700">
