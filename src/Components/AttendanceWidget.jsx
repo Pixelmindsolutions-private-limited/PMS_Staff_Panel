@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   FiClock,
   FiMapPin,
@@ -10,6 +16,9 @@ import {
   FiPlay,
   FiMinus,
   FiChevronDown,
+  FiFileText,
+  FiRefreshCw,
+  FiTrash2,
 } from "react-icons/fi";
 
 const API_BASE_CANDIDATES = ["http://15.135.216.211:5000/api"];
@@ -77,6 +86,181 @@ const getBreakSeconds = (b, anchorStartMs = null) => {
   if (b?.duration != null)
     return Math.max(0, Math.round(Number(b.duration) * 60));
   return 0;
+};
+
+// =====================================================================
+// DELAY REQUEST HELPERS
+// A "delay" is one idle_start -> idle_end pair in a session's activityLogs.
+// Start/end come from the log timestamps, the length is derived from them
+// (idle_end.duration is only whole minutes, so it hides short delays).
+// =====================================================================
+const IST_TZ = "Asia/Kolkata";
+
+// YYYY-MM-DD in IST, matching the timezone used for display
+const getISTDayKey = (value) => {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  // en-CA gives YYYY-MM-DD
+  return d.toLocaleDateString("en-CA", { timeZone: IST_TZ });
+};
+
+const DELAY_REQUEST_TYPES = [
+  { value: "idle_delay", label: "Idle / Away" },
+  { value: "meeting", label: "Meeting" },
+  { value: "issue", label: "Issue" },
+  { value: "technical_issue", label: "Technical Issue" },
+  { value: "client_call", label: "Client Call" },
+  { value: "other", label: "Other" },
+];
+
+const DELAY_STATUS_STYLES = {
+  pending: "bg-amber-50 text-amber-700 border-amber-200",
+  approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  rejected: "bg-red-50 text-red-600 border-red-200",
+};
+
+const formatClock = (ms) =>
+  new Date(ms).toLocaleTimeString("en-US", {
+    timeZone: IST_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+const formatShortDate = (value) =>
+  value
+    ? new Date(value).toLocaleDateString("en-IN", {
+        timeZone: IST_TZ,
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : "";
+
+const formatDelayDuration = (seconds) => {
+  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  if (s < 60) return `${s} sec${s === 1 ? "" : "s"}`;
+  const m = Math.round(s / 60);
+  return `${m} min${m === 1 ? "" : "s"}`;
+};
+
+// "10:22 AM-12:14 PM - 112 mins"
+const formatDelayLabel = (startMs, endMs, seconds) =>
+  `${formatClock(startMs)}-${formatClock(endMs)} - ${formatDelayDuration(seconds)}`;
+
+// Pairs idle_start / idle_end logs into delay periods.
+// - repeated idle_start logs with the same timestamp are one delay
+// - an idle_start with no idle_end yet is the current (ongoing) delay
+const extractDelayPeriods = (session) => {
+  const logs = Array.isArray(session?.activityLogs) ? session.activityLogs : [];
+  const periods = [];
+  let open = null;
+
+  for (const log of logs) {
+    if (!log || (log.type !== "idle_start" && log.type !== "idle_end"))
+      continue;
+    const ts = new Date(log.timestamp).getTime();
+    if (!Number.isFinite(ts)) continue;
+
+    if (log.type === "idle_start") {
+      if (open) continue; // duplicate start while already idle
+      const prev = periods[periods.length - 1];
+      open =
+        prev && prev.startMs === ts
+          ? { startMs: ts, base: prev } // same delay logged again
+          : { startMs: ts, base: null };
+      continue;
+    }
+
+    // idle_end
+    if (!open || ts <= open.startMs) continue;
+    if (open.base) {
+      open.base.endMs = Math.max(open.base.endMs, ts);
+      open.base.durationSeconds = Math.round(
+        (open.base.endMs - open.base.startMs) / 1000,
+      );
+    } else {
+      periods.push({
+        startMs: open.startMs,
+        endMs: ts,
+        durationSeconds: Math.round((ts - open.startMs) / 1000),
+        ongoing: false,
+      });
+    }
+    open = null;
+  }
+
+  if (open && !open.base) {
+    periods.push({
+      startMs: open.startMs,
+      endMs: null,
+      durationSeconds: 0,
+      ongoing: true,
+    });
+  }
+  return periods.sort((a, b) => a.startMs - b.startMs);
+};
+
+const STATUS_PRIORITY = { approved: 3, pending: 2, rejected: 1 };
+
+// The existing request (if any) that overlaps a delay period.
+const findRequestForPeriod = (requests, sessionId, period) => {
+  let best = null;
+  for (const r of requests || []) {
+    if (String(r.sessionId) !== String(sessionId)) continue;
+    const rs = new Date(r.startTime).getTime();
+    const re = new Date(r.endTime).getTime();
+    if (rs < period.endMs && re > period.startMs) {
+      if (
+        !best ||
+        (STATUS_PRIORITY[r.status] || 0) > (STATUS_PRIORITY[best.status] || 0)
+      ) {
+        best = r;
+      }
+    }
+  }
+  return best;
+};
+
+// Groups finished delay periods by work session for the dropdown.
+const buildDelayGroups = (sessions, requests) => {
+  const groups = [];
+  const todayKey = getISTDayKey(new Date()); // today in IST
+
+  (sessions || []).forEach((s) => {
+    // Only today's sessions. Prefer the session's startTime; fall back to
+    // s.date if the backend supplies a date-only field.
+    const sessionDayKey = getISTDayKey(s.startTime || s.date);
+    if (sessionDayKey !== todayKey) return;
+
+    const items = extractDelayPeriods(s)
+      .filter((p) => !p.ongoing && p.durationSeconds >= 1)
+      // Belt-and-braces: keep only periods that started today in IST.
+      // Protects against a session that spans midnight.
+      .filter((p) => getISTDayKey(p.startMs) === todayKey)
+      .map((p) => {
+        const req = findRequestForPeriod(requests, s._id, p);
+        return {
+          id: `${s._id}_${p.startMs}`,
+          sessionId: s._id,
+          startMs: p.startMs,
+          endMs: p.endMs,
+          durationSeconds: p.durationSeconds,
+          label: formatDelayLabel(p.startMs, p.endMs, p.durationSeconds),
+          requestStatus: req ? req.status : null,
+        };
+      });
+
+    if (items.length) {
+      groups.push({
+        sessionId: s._id,
+        label: s.dateIST || formatShortDate(s.startTime || s.date),
+        items,
+      });
+    }
+  });
+  return groups;
 };
 
 const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
@@ -161,6 +345,21 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [isCardMinimized, setIsCardMinimized] = useState(false);
 
+  // ===== Delay request panel =====
+  const [delayReqOpen, setDelayReqOpen] = useState(false);
+  const [delayReqLoading, setDelayReqLoading] = useState(false);
+  const [delayReqSessions, setDelayReqSessions] = useState([]);
+  const [delayReqList, setDelayReqList] = useState([]);
+  const [delayReqSummary, setDelayReqSummary] = useState(null);
+  const [delayReqSelected, setDelayReqSelected] = useState([]);
+  const [delayReqPickerOpen, setDelayReqPickerOpen] = useState(false);
+  const [delayReqType, setDelayReqType] = useState("idle_delay");
+  const [delayReqReason, setDelayReqReason] = useState("");
+  const [delayReqSubmitting, setDelayReqSubmitting] = useState(false);
+  const [delayReqError, setDelayReqError] = useState("");
+  const [delayReqSuccess, setDelayReqSuccess] = useState("");
+  const [delayReqCancelId, setDelayReqCancelId] = useState(null);
+
   const handleMinimize = () => {
     if (typeof window !== "undefined" && window.electronAPI?.minimize) {
       window.electronAPI.minimize();
@@ -185,6 +384,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     if (window.electronAPI?.setSize) {
       if (isCardMinimized) {
         window.electronAPI.setSize(540, 75);
+      } else if (delayReqOpen) {
+        // delay request panel needs more room than the dashboard
+        window.electronAPI.setSize(540, 660);
       } else if (punchStatus === "out") {
         window.electronAPI.setSize(540, 420);
       } else if (
@@ -206,6 +408,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     activeSeparateCard,
     showLunchFinished,
     showTeaFinished,
+    delayReqOpen,
   ]);
 
   // Refs for tracking activity & sync
@@ -275,7 +478,10 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           const res = await fetch(`${baseUrl}${endpoint}`, options);
           const data = await res.json();
           if (!data.success) {
-            throw new Error(data.message || "API call failed");
+            const apiErr = new Error(data.message || "API call failed");
+            // keep the full response (e.g. per-request validation errors)
+            apiErr.payload = data;
+            throw apiErr;
           }
           return data;
         } catch (err) {
@@ -383,7 +589,10 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       if (activeSeparateCard === "lunch") {
         setLunchTakenSec(elapsed);
         try {
-          sessionStorage.setItem(`pms_lunch_taken_${todayStr}`, String(elapsed));
+          sessionStorage.setItem(
+            `pms_lunch_taken_${todayStr}`,
+            String(elapsed),
+          );
         } catch (_) {}
       } else if (activeSeparateCard === "tea") {
         setTeaTakenSec(elapsed);
@@ -1472,6 +1681,152 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     }
   };
 
+  // ================= DELAY REQUEST HANDLERS =================
+
+  // Delay periods (idle_start -> idle_end) grouped per work session.
+  const delayGroups = useMemo(
+    () => buildDelayGroups(delayReqSessions, delayReqList),
+    [delayReqSessions, delayReqList],
+  );
+  const delayOptions = useMemo(
+    () => delayGroups.flatMap((g) => g.items),
+    [delayGroups],
+  );
+  const selectedDelayOptions = useMemo(
+    () => delayOptions.filter((o) => delayReqSelected.includes(o.id)),
+    [delayOptions, delayReqSelected],
+  );
+  const selectedDelaySeconds = selectedDelayOptions.reduce(
+    (sum, o) => sum + o.durationSeconds,
+    0,
+  );
+
+  // Loads this employee's work sessions (for the idle logs) and their
+  // existing delay requests.
+  const loadDelayRequestData = useCallback(async () => {
+    if (!employeeId || !authToken) return;
+    setDelayReqLoading(true);
+    setDelayReqError("");
+    try {
+      const encodedId = encodeURIComponent(employeeId);
+      const [sessionsRes, requestsRes] = await Promise.all([
+        apiCall(`/work-session/all-sessions/${encodedId}`),
+        apiCall(`/work-session/delay-request/my/${encodedId}?limit=100`),
+      ]);
+      setDelayReqSessions(
+        Array.isArray(sessionsRes?.data?.sessions)
+          ? sessionsRes.data.sessions
+          : [],
+      );
+      setDelayReqList(Array.isArray(requestsRes?.data) ? requestsRes.data : []);
+      setDelayReqSummary(requestsRes?.summary || null);
+    } catch (err) {
+      setDelayReqError(err.message || "Unable to load delay data");
+    } finally {
+      setDelayReqLoading(false);
+    }
+  }, [apiCall, employeeId, authToken]);
+
+  const openDelayRequestPanel = () => {
+    setDelayReqError("");
+    setDelayReqSuccess("");
+    setDelayReqSelected([]);
+    setDelayReqPickerOpen(false);
+    setDelayReqCancelId(null);
+    setDelayReqOpen(true);
+    loadDelayRequestData();
+  };
+
+  const closeDelayRequestPanel = () => {
+    setDelayReqOpen(false);
+    setDelayReqPickerOpen(false);
+  };
+
+  const toggleDelayOption = (id) => {
+    setDelayReqSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+
+  const handleSubmitDelayRequests = async () => {
+    if (delayReqSubmitting) return;
+    setDelayReqError("");
+    setDelayReqSuccess("");
+
+    const chosen = delayOptions.filter(
+      (o) => delayReqSelected.includes(o.id) && !o.requestStatus,
+    );
+    const reason = delayReqReason.trim();
+
+    if (!chosen.length) {
+      setDelayReqError("Select at least one delay period.");
+      return;
+    }
+    if (!reason) {
+      setDelayReqError("Enter a reason for the delay.");
+      return;
+    }
+
+    setDelayReqSubmitting(true);
+    try {
+      const res = await apiCall("/work-session/delay-request", "POST", {
+        sessionId: chosen[0]?.sessionId,
+        requests: chosen.map((o) => ({
+          reason,
+          requestType: delayReqType,
+          startTime: new Date(o.startMs).toISOString(),
+          endTime: new Date(o.endMs).toISOString(),
+        })),
+      });
+
+      setDelayReqSuccess(res.message || "Delay request submitted.");
+      setDelayReqSelected([]);
+      setDelayReqReason("");
+      setDelayReqPickerOpen(false);
+      await loadDelayRequestData();
+    } catch (err) {
+      const details = Array.isArray(err.payload?.errors)
+        ? err.payload.errors
+            .map((e) => {
+              const o = chosen[e.index];
+              const where = o ? o.label : `Request ${e.index + 1}`;
+              return `${where}: ${e.message}`;
+            })
+            .join(" | ")
+        : "";
+      setDelayReqError(
+        details
+          ? `${err.message} ${details}`
+          : err.message || "Unable to submit delay request",
+      );
+    } finally {
+      setDelayReqSubmitting(false);
+    }
+  };
+
+  // First tap asks for confirmation, second tap cancels the pending request.
+  const handleCancelDelayRequest = async (id) => {
+    if (delayReqCancelId !== id) {
+      setDelayReqCancelId(id);
+      setTimeout(
+        () => setDelayReqCancelId((cur) => (cur === id ? null : cur)),
+        4000,
+      );
+      return;
+    }
+    setDelayReqError("");
+    setDelayReqSuccess("");
+    try {
+      await apiCall(`/work-session/delay-request/${id}`, "DELETE");
+      setDelayReqCancelId(null);
+      setDelayReqSuccess("Delay request cancelled.");
+      await loadDelayRequestData();
+    } catch (err) {
+      setDelayReqCancelId(null);
+      setDelayReqError(err.message || "Unable to cancel delay request");
+    }
+  };
+
   // ================= Confirmation Modal functions =================
 
   const [showBreakConfirm, setShowBreakConfirm] = useState(false);
@@ -1578,6 +1933,356 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         </button>
       </div>
     ) : null;
+
+  // Opens the delay request panel (used on the dashboard, start and end cards)
+  const renderDelayRequestButton = (extraClass = "") => (
+    <button
+      type="button"
+      onClick={openDelayRequestPanel}
+      className={`w-full py-2.5 text-xs sm:text-sm rounded-xl bg-[#e6f5f3] hover:bg-[#d3efea] text-[#00897b] border border-[#b9e4df] font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${extraClass}`}
+    >
+      <FiFileText className="shrink-0" />
+      DELAY REQUEST
+    </button>
+  );
+
+  const renderDelayStatusBadge = (status) => (
+    <span
+      className={`px-2 py-0.5 rounded-full border text-[10px] font-bold capitalize whitespace-nowrap ${
+        DELAY_STATUS_STYLES[status] ||
+        "bg-slate-50 text-slate-600 border-slate-200"
+      }`}
+    >
+      {status}
+    </span>
+  );
+
+  // ================= DELAY REQUEST PANEL =================
+  const renderDelayRequestPanel = () => {
+    if (!delayReqOpen) return null;
+
+    const hasSelection = selectedDelayOptions.length > 0;
+
+    return (
+      <div
+        className="fixed inset-0 z-[60] bg-teal-950/60 backdrop-blur-sm flex items-center justify-center p-2"
+        style={{ WebkitAppRegion: "no-drag" }}
+      >
+        <div
+          className="w-full max-w-[520px] max-h-full bg-white rounded-2xl border border-teal-100 shadow-2xl flex flex-col overflow-hidden"
+          style={{ WebkitAppRegion: "no-drag" }}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-100 shrink-0">
+            <div className="min-w-0">
+              <h3 className="font-syne font-extrabold text-[#063330] text-sm sm:text-base leading-tight">
+                Delay Requests
+              </h3>
+              <p className="text-[11px] text-slate-500 font-medium truncate">
+                Ask your admin to count idle time as work
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={loadDelayRequestData}
+                disabled={delayReqLoading}
+                title="Refresh"
+                className="w-8 h-8 rounded-lg border border-slate-200 bg-slate-50 hover:bg-teal-50 text-slate-600 flex items-center justify-center cursor-pointer disabled:opacity-50"
+              >
+                <FiRefreshCw
+                  size={14}
+                  className={delayReqLoading ? "animate-spin" : ""}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={closeDelayRequestPanel}
+                title="Close"
+                className="w-8 h-8 rounded-lg border border-slate-200 bg-slate-50 hover:bg-red-50 hover:text-red-600 text-slate-600 flex items-center justify-center cursor-pointer"
+              >
+                <FiX size={15} />
+              </button>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="overflow-y-auto p-3 space-y-3">
+            {!employeeId || !authToken ? (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+                Please log in to send delay requests.
+              </div>
+            ) : (
+              <>
+                {/* Summary */}
+                {delayReqSummary && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {["pending", "approved", "rejected"].map((key) => (
+                      <div
+                        key={key}
+                        className={`rounded-xl border px-2 py-1.5 text-center ${DELAY_STATUS_STYLES[key]}`}
+                      >
+                        <div className="text-base font-extrabold leading-none">
+                          {delayReqSummary[key] || 0}
+                        </div>
+                        <div className="text-[10px] font-bold capitalize mt-0.5">
+                          {key}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Banners */}
+                {delayReqError && (
+                  <div className="p-2 bg-red-50 border border-red-200 text-red-700 rounded-xl text-[11px] flex items-start justify-between gap-2 break-words">
+                    <span className="flex items-start gap-1.5 font-medium min-w-0">
+                      <FiAlertCircle className="shrink-0 mt-0.5" />
+                      <span className="min-w-0 break-words">
+                        {delayReqError}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setDelayReqError("")}
+                      className="text-red-500 font-bold shrink-0 leading-none"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+                {delayReqSuccess && (
+                  <div className="p-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-[11px] flex items-start justify-between gap-2">
+                    <span className="flex items-start gap-1.5 font-medium min-w-0">
+                      <FiCheckCircle className="shrink-0 mt-0.5" />
+                      <span className="min-w-0 break-words">
+                        {delayReqSuccess}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setDelayReqSuccess("")}
+                      className="text-emerald-600 font-bold shrink-0 leading-none"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+
+                {/* New request */}
+                <div className="rounded-xl border border-slate-200 p-3 space-y-2.5">
+                  <div className="text-xs font-extrabold text-[#063330]">
+                    New request
+                  </div>
+
+                  {/* Delay period dropdown (idle_start -> idle_end) */}
+                  <div className="border border-slate-200 rounded-xl bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setDelayReqPickerOpen((o) => !o)}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-bold text-slate-700 cursor-pointer"
+                    >
+                      <span className="truncate">
+                        {hasSelection
+                          ? `${selectedDelayOptions.length} delay${
+                              selectedDelayOptions.length > 1 ? "s" : ""
+                            } selected - ${formatDelayDuration(selectedDelaySeconds)}`
+                          : delayReqLoading
+                            ? "Loading delays..."
+                            : "Select delay period(s)"}
+                      </span>
+                      <FiChevronDown
+                        className={`shrink-0 text-slate-400 transition-transform ${
+                          delayReqPickerOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+
+                    {delayReqPickerOpen && (
+                      <div className="border-t border-slate-100 max-h-44 overflow-y-auto">
+                        {delayGroups.length === 0 ? (
+                          <div className="px-3 py-3 text-[11px] text-slate-400 text-center font-medium">
+                            {delayReqLoading
+                              ? "Loading..."
+                              : "No completed delay periods found."}
+                          </div>
+                        ) : (
+                          delayGroups.map((group) => (
+                            <div key={group.sessionId}>
+                              <div className="px-3 py-1 bg-slate-50 text-[10px] font-bold text-slate-500 sticky top-0">
+                                {group.label}
+                              </div>
+                              {group.items.map((o) => {
+                                const disabled = !!o.requestStatus;
+                                const checked = delayReqSelected.includes(o.id);
+                                return (
+                                  <label
+                                    key={o.id}
+                                    className={`flex items-center gap-2 px-3 py-1.5 text-[11px] ${
+                                      disabled
+                                        ? "opacity-60 cursor-not-allowed"
+                                        : "cursor-pointer hover:bg-teal-50"
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="accent-teal-600 shrink-0"
+                                      checked={checked}
+                                      disabled={disabled}
+                                      onChange={() => toggleDelayOption(o.id)}
+                                    />
+                                    <span className="flex-1 min-w-0 font-semibold text-slate-700 tabular-nums">
+                                      {o.label}
+                                    </span>
+                                    {o.requestStatus &&
+                                      renderDelayStatusBadge(o.requestStatus)}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-[10px] text-slate-400 font-medium -mt-1">
+                    Your current idle period appears here after you resume work.
+                  </p>
+
+                  <select
+                    className="w-full h-9 px-3 border border-slate-200 rounded-xl bg-white text-xs font-semibold text-slate-700 outline-none cursor-pointer"
+                    value={delayReqType}
+                    onChange={(e) => setDelayReqType(e.target.value)}
+                  >
+                    {DELAY_REQUEST_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  <textarea
+                    rows={2}
+                    maxLength={500}
+                    placeholder="Reason for the delay"
+                    className="select-text w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs text-slate-700 outline-none focus:border-teal-500 resize-none"
+                    value={delayReqReason}
+                    onChange={(e) => setDelayReqReason(e.target.value)}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={handleSubmitDelayRequests}
+                    disabled={
+                      delayReqSubmitting ||
+                      !hasSelection ||
+                      !delayReqReason.trim()
+                    }
+                    className="w-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {delayReqSubmitting ? (
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <FiCheckCircle />
+                    )}
+                    {hasSelection
+                      ? `Send ${selectedDelayOptions.length} request${
+                          selectedDelayOptions.length > 1 ? "s" : ""
+                        }`
+                      : "Send request"}
+                  </button>
+                </div>
+
+                {/* My requests */}
+                <div className="space-y-2">
+                  <div className="text-xs font-extrabold text-[#063330]">
+                    My requests
+                  </div>
+
+                  {delayReqList.length === 0 ? (
+                    <div className="p-3 rounded-xl border border-dashed border-slate-200 text-center text-[11px] text-slate-400 font-medium">
+                      {delayReqLoading
+                        ? "Loading..."
+                        : "You have not sent any delay requests yet."}
+                    </div>
+                  ) : (
+                    delayReqList.map((r) => {
+                      const startMs = new Date(r.startTime).getTime();
+                      const endMs = new Date(r.endTime).getTime();
+                      const typeLabel =
+                        DELAY_REQUEST_TYPES.find(
+                          (t) => t.value === r.requestType,
+                        )?.label || r.requestType;
+                      return (
+                        <div
+                          key={r._id}
+                          className="rounded-xl border border-slate-200 p-2.5 space-y-1"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-extrabold text-[#063330] tabular-nums">
+                                {formatDelayLabel(
+                                  startMs,
+                                  endMs,
+                                  r.durationSeconds,
+                                )}
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-semibold">
+                                {formatShortDate(r.startTime)}
+                                {r.requestLabel ? ` - ${r.requestLabel}` : ""}
+                                {typeLabel ? ` - ${typeLabel}` : ""}
+                              </div>
+                            </div>
+                            {renderDelayStatusBadge(r.status)}
+                          </div>
+
+                          <p className="text-[11px] text-slate-600 break-words">
+                            {r.reason}
+                          </p>
+
+                          {r.status === "approved" && (
+                            <p className="text-[10px] font-semibold text-emerald-700">
+                              {formatDelayDuration(r.creditedSeconds)} counted
+                              as work
+                            </p>
+                          )}
+                          {r.adminComment ? (
+                            <p className="text-[10px] text-slate-500 break-words">
+                              Admin: {r.adminComment}
+                            </p>
+                          ) : null}
+
+                          {r.status === "pending" && (
+                            <div className="flex justify-end pt-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleCancelDelayRequest(r._id)}
+                                className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold flex items-center gap-1 cursor-pointer ${
+                                  delayReqCancelId === r._id
+                                    ? "bg-red-600 border-red-600 text-white"
+                                    : "bg-white border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600"
+                                }`}
+                              >
+                                <FiTrash2 size={11} />
+                                {delayReqCancelId === r._id
+                                  ? "Tap again to cancel"
+                                  : "Cancel request"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const staffDisplayName =
     staffDetails?.employeeName ||
@@ -2059,15 +2764,18 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 </span>
               </div>
 
-              {/* End Work Day */}
-              <button
-                type="button"
-                onClick={() => setShowEndConfirm(true)}
-                disabled={isLoading}
-                className="w-full py-2.5 text-sm rounded-xl bg-[#fff1f2] hover:bg-[#ffe4e6] text-[#dc2626] border border-slate-200 font-extrabold transition-all"
-              >
-                END WORK DAY
-              </button>
+              {/* Delay Request | End Work Day */}
+              <div className="grid grid-cols-2 gap-2">
+                {renderDelayRequestButton()}
+                <button
+                  type="button"
+                  onClick={() => setShowEndConfirm(true)}
+                  disabled={isLoading}
+                  className="w-full py-2.5 text-xs sm:text-sm rounded-xl bg-[#fff1f2] hover:bg-[#ffe4e6] text-[#dc2626] border border-slate-200 font-extrabold transition-all"
+                >
+                  END WORK DAY
+                </button>
+              </div>
 
               {showBreakConfirm && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -2169,6 +2877,8 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 )}
                 START WORKING 🚀
               </button>
+
+              {punchStatus === "out" && renderDelayRequestButton()}
             </div>
           )}
 
@@ -2237,6 +2947,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                 Total Work: {formatSecToHMS(workingSeconds)} • Delay:{" "}
                 {formatSecToHMS(delaySeconds)}
               </div>
+              <div className="mt-3" style={{ WebkitAppRegion: "no-drag" }}>
+                {renderDelayRequestButton()}
+              </div>
             </div>
           )}
         </div>
@@ -2301,6 +3014,9 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
           </div>
         </div>
       )}
+
+      {/* ================= MODAL: DELAY REQUESTS ================= */}
+      {renderDelayRequestPanel()}
     </div>
   );
 };
