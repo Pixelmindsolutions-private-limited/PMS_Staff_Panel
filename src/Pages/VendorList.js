@@ -21,7 +21,7 @@ export default function VendorList() {
     setLoading(true);
     setError("");
     try {
-      const token = localStorage.getItem("adminToken");
+      const token = sessionStorage.getItem("adminToken");
       const res = await fetch("http://15.135.216.211:5000/api/admin/getvendors", {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -100,7 +100,7 @@ export default function VendorList() {
     setActionLoading(true);
     setError("");
     try {
-      const token = localStorage.getItem("adminToken");
+      const token = sessionStorage.getItem("adminToken");
       const res = await fetch(
         `http://15.135.216.211:5000/api/admin/updatevendor/${editedVendor._id}`,
         {
@@ -129,7 +129,7 @@ export default function VendorList() {
     setActionLoading(true);
     setError("");
     try {
-      const token = localStorage.getItem("adminToken");
+      const token = sessionStorage.getItem("adminToken");
       const res = await fetch(
         `http://15.135.216.211:5000/api/admin/deletevendor/${vendorId}`,
         {

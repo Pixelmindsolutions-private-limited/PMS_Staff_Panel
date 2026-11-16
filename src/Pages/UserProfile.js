@@ -17,7 +17,7 @@ function UserDetail() {
 
     const fetchUser = async () => {
       try {
-        const token = localStorage.getItem("adminToken");
+        const token = sessionStorage.getItem("adminToken");
         const res = await fetch(`http://15.135.216.211:5000/api/admin/getsingleuser/${userId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });

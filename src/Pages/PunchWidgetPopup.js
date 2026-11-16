@@ -17,7 +17,7 @@ const PunchWidgetPopup = () => {
         const persisted = await window.electronAPI.getPersistedAuth();
         if (persisted?.token && persisted?.user && (persisted.user.employeeId || persisted.user._id)) {
           const raw = JSON.stringify(persisted);
-          localStorage.setItem('staffDetails', raw);
+          sessionStorage.setItem('staffDetails', raw);
           sessionStorage.setItem('staffDetails', raw);
           sessionStorage.setItem('token', persisted.token);
           if (persisted.user.employeeId) {
@@ -50,7 +50,7 @@ const PunchWidgetPopup = () => {
     const removeAuthSync = window.electronAPI?.onAuthSync?.((payload) => {
         if (payload?.token && payload?.user && (payload.user.employeeId || payload.user._id)) {
           const raw = JSON.stringify(payload);
-          localStorage.setItem('staffDetails', raw);
+          sessionStorage.setItem('staffDetails', raw);
           sessionStorage.setItem('staffDetails', raw);
           sessionStorage.setItem('token', payload.token);
           if (payload.user.employeeId) {
@@ -97,7 +97,7 @@ const PunchWidgetPopup = () => {
           user: data.data.staff,
           type: 'staff'
         });
-        localStorage.setItem('staffDetails', payload);
+        sessionStorage.setItem('staffDetails', payload);
         sessionStorage.setItem('staffDetails', payload);
         sessionStorage.setItem('token', data.data.token);
         sessionStorage.setItem('employeeId', data.data.staff.employeeId);

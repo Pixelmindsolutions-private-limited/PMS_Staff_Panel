@@ -25,7 +25,7 @@ export const getStoredStaffDetails = () => {
       const parsed = JSON.parse(rawSession);
       if (parsed?.token && parsed?.user) {
         try {
-          localStorage.setItem("staffDetails", rawSession);
+          sessionStorage.setItem("staffDetails", rawSession);
         } catch (_) {}
         return parsed;
       }
@@ -33,7 +33,7 @@ export const getStoredStaffDetails = () => {
   } catch (_) {}
 
   try {
-    const rawLocal = localStorage.getItem("staffDetails");
+    const rawLocal = sessionStorage.getItem("staffDetails");
     if (rawLocal) {
       const parsed = JSON.parse(rawLocal);
       if (parsed?.token && parsed?.user) {
@@ -109,7 +109,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   const [lunchTakenSec, setLunchTakenSec] = useState(() => {
     try {
       const todayStr = new Date().toISOString().split("T")[0];
-      return Number(localStorage.getItem(`pms_lunch_taken_${todayStr}`) || 0);
+      return Number(sessionStorage.getItem(`pms_lunch_taken_${todayStr}`) || 0);
     } catch (_) {
       return 0;
     }
@@ -117,7 +117,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   const [teaTakenSec, setTeaTakenSec] = useState(() => {
     try {
       const todayStr = new Date().toISOString().split("T")[0];
-      return Number(localStorage.getItem(`pms_tea_taken_${todayStr}`) || 0);
+      return Number(sessionStorage.getItem(`pms_tea_taken_${todayStr}`) || 0);
     } catch (_) {
       return 0;
     }
@@ -128,7 +128,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   ] = useState(() => {
     try {
       const todayStr = new Date().toISOString().split("T")[0];
-      const saved = localStorage.getItem(
+      const saved = sessionStorage.getItem(
         `pms_scheduled_break_resume_${todayStr}`,
       );
       return saved == null ? null : Number(saved);
@@ -141,7 +141,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
   const [customBreaksList, setCustomBreaksList] = useState(() => {
     try {
       const todayStr = new Date().toISOString().split("T")[0];
-      const saved = localStorage.getItem(`pms_custom_breaks_${todayStr}`);
+      const saved = sessionStorage.getItem(`pms_custom_breaks_${todayStr}`);
       return saved ? JSON.parse(saved) : [];
     } catch (_) {
       return [];
@@ -383,12 +383,12 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       if (activeSeparateCard === "lunch") {
         setLunchTakenSec(elapsed);
         try {
-          localStorage.setItem(`pms_lunch_taken_${todayStr}`, String(elapsed));
+          sessionStorage.setItem(`pms_lunch_taken_${todayStr}`, String(elapsed));
         } catch (_) {}
       } else if (activeSeparateCard === "tea") {
         setTeaTakenSec(elapsed);
         try {
-          localStorage.setItem(`pms_tea_taken_${todayStr}`, String(elapsed));
+          sessionStorage.setItem(`pms_tea_taken_${todayStr}`, String(elapsed));
         } catch (_) {}
       }
 
@@ -426,7 +426,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         next[idx] = { ...next[idx], takenSec: elapsed };
         try {
           const todayStr = new Date().toISOString().split("T")[0];
-          localStorage.setItem(
+          sessionStorage.setItem(
             `pms_custom_breaks_${todayStr}`,
             JSON.stringify(next),
           );
@@ -511,7 +511,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             if (lunchSec > 0) {
               setLunchTakenSec(lunchSec);
               try {
-                localStorage.setItem(
+                sessionStorage.setItem(
                   `pms_lunch_taken_${todayStr}`,
                   String(lunchSec),
                 );
@@ -520,7 +520,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             if (teaSec > 0) {
               setTeaTakenSec(teaSec);
               try {
-                localStorage.setItem(
+                sessionStorage.setItem(
                   `pms_tea_taken_${todayStr}`,
                   String(teaSec),
                 );
@@ -529,7 +529,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             if (customs.length > 0) {
               setCustomBreaksList(customs);
               try {
-                localStorage.setItem(
+                sessionStorage.setItem(
                   `pms_custom_breaks_${todayStr}`,
                   JSON.stringify(customs),
                 );
@@ -698,7 +698,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
 
       try {
         sessionStorage.setItem("staffDetails", JSON.stringify(newDetails));
-        localStorage.setItem("staffDetails", JSON.stringify(newDetails));
+        sessionStorage.setItem("staffDetails", JSON.stringify(newDetails));
       } catch (error) {
         console.error("Unable to save staff details:", error);
       }
@@ -910,7 +910,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         activeSeparateCard === null
       ) {
         const lunchDoneKey = `pms_lunch_done_${todayStr}`;
-        if (!localStorage.getItem(lunchDoneKey)) {
+        if (!sessionStorage.getItem(lunchDoneKey)) {
           setActiveSeparateCard("lunch");
           setScheduledBreakRemaining(45 * 60);
           setScheduledBreakElapsed(0);
@@ -925,7 +925,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         activeSeparateCard === null
       ) {
         const teaDoneKey = `pms_tea_done_${todayStr}`;
-        if (!localStorage.getItem(teaDoneKey)) {
+        if (!sessionStorage.getItem(teaDoneKey)) {
           setActiveSeparateCard("tea");
           setScheduledBreakRemaining(15 * 60);
           setScheduledBreakElapsed(0);
@@ -1172,7 +1172,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
     if (isLoading) return;
     const todayStr = new Date().toISOString().split("T")[0];
     const doneToday =
-      localStorage.getItem(`pms_${type}_done_${todayStr}`) === "1";
+      sessionStorage.getItem(`pms_${type}_done_${todayStr}`) === "1";
     if (doneToday) {
       setError(
         `${type === "tea" ? "Tea" : "Lunch"} break has already been taken today.`,
@@ -1276,15 +1276,15 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       setPunchStatus("in");
       setWorkSecondsAtLastScheduledBreakResume(workingSeconds);
       try {
-        localStorage.setItem(
+        sessionStorage.setItem(
           `pms_scheduled_break_resume_${todayStr}`,
           String(workingSeconds),
         );
       } catch (_) {}
 
       try {
-        localStorage.setItem(`pms_${breakType}_done_${todayStr}`, "1");
-        localStorage.setItem(
+        sessionStorage.setItem(`pms_${breakType}_done_${todayStr}`, "1");
+        sessionStorage.setItem(
           `pms_${breakType}_taken_${todayStr}`,
           String(actualSeconds),
         );
@@ -1360,7 +1360,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
       setCustomBreaksList((prev) => {
         const next = [...prev, newCustomBreak];
         try {
-          localStorage.setItem(
+          sessionStorage.setItem(
             `pms_custom_breaks_${todayStr}`,
             JSON.stringify(next),
           );
@@ -1411,7 +1411,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
             : item,
         );
         try {
-          localStorage.setItem(
+          sessionStorage.setItem(
             `pms_custom_breaks_${todayStr}`,
             JSON.stringify(next),
           );
@@ -1998,7 +1998,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                   // disabled={
                   //   isLoading ||
                   //   punchStatus === "break" ||
-                  //   localStorage.getItem(`pms_lunch_done_${todayKey}`) ===
+                  //   sessionStorage.getItem(`pms_lunch_done_${todayKey}`) ===
                   //     "1" ||
                   //   scheduledBreakBlocked
                   // }
@@ -2021,7 +2021,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
                   // disabled={
                   //   isLoading ||
                   //   punchStatus === "break" ||
-                  //   localStorage.getItem(`pms_tea_done_${todayKey}`) === "1" ||
+                  //   sessionStorage.getItem(`pms_tea_done_${todayKey}`) === "1" ||
                   //   scheduledBreakBlocked
                   // }
                   className="min-w-0 rounded-xl border border-[#b9e4df] bg-[#f0fbf9] px-1 py-2 text-center"

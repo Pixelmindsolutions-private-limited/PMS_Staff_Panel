@@ -17,8 +17,8 @@ export const getLoginDetails = () => {
     return null;
   }
 };
-// export const getAuthToken = () => getLoginDetails()?.token || "";
-export const getAuthToken = () => "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhZjU0OTQ1OWZmYTE5YzkwYzQyMGI2NCIsImVtcGxveWVlSWQiOiJQTVM5OTk5Iiwicm9sZSI6IlRlc3RlciAvIFRlc3RpbmciLCJ0eXBlIjoic3RhZmYiLCJpYXQiOjE3OTQ4MDY1OTIsImV4cCI6MTc5NTQxMTM5Mn0.vHQmWcXMuFLSJ9WA5JK2WsWkLVd4f4HNsu0D7-nDZVI";
+export const getAuthToken = () => getLoginDetails()?.token || "";
+// export const getAuthToken = () => "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhZjU0OTQ1OWZmYTE5YzkwYzQyMGI2NCIsImVtcGxveWVlSWQiOiJQTVM5OTk5Iiwicm9sZSI6IlRlc3RlciAvIFRlc3RpbmciLCJ0eXBlIjoic3RhZmYiLCJpYXQiOjE3OTQ4MDY1OTIsImV4cCI6MTc5NTQxMTM5Mn0.vHQmWcXMuFLSJ9WA5JK2WsWkLVd4f4HNsu0D7-nDZVI";
 
 const decodeJwt = (token) => {
   try {

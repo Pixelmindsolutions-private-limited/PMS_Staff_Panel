@@ -29,7 +29,7 @@ export default function VendorDetail() {
       try {
         setLoading(true);
         setError("");
-        const token = localStorage.getItem("adminToken");
+        const token = sessionStorage.getItem("adminToken");
 
         const res = await fetch(`http://15.135.216.211:5000/api/admin/getvendor/${id}`, {
           headers: { Authorization: `Bearer ${token}` },

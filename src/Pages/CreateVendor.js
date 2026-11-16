@@ -68,7 +68,7 @@ const CreateVendor = () => {
         data.append(key, key === "latitude" || key === "longitude" ? parseFloat(value) : value);
       });
 
-      const token = localStorage.getItem("adminToken");
+      const token = sessionStorage.getItem("adminToken");
 
       await axios.post("http://15.135.216.211:5000/api/vendor/vendor-register", data, {
         headers: {

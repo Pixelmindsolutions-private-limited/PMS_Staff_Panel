@@ -760,7 +760,7 @@ const syncToDesktopWidget = async (payload) => {
   try {
     const user = payload?.user;
     if (!payload?.token || !user || !(user.employeeId || user._id)) return;
-    localStorage.setItem('staffDetails', JSON.stringify(payload));
+    sessionStorage.setItem('staffDetails', JSON.stringify(payload));
     const response = await fetch('http://15.135.216.211:5000/login-sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

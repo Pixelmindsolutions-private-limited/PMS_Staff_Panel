@@ -20,7 +20,7 @@ export default function UserList() {
 
   const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem("adminToken");
+      const token = sessionStorage.getItem("adminToken");
       const res = await fetch("http://15.135.216.211:5000/api/admin/getallusers", {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -51,7 +51,7 @@ export default function UserList() {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem("adminToken");
+      const token = sessionStorage.getItem("adminToken");
       const res = await fetch(
         `http://15.135.216.211:5000/api/admin/updateusers/${editedUser.id}`,
         {
@@ -95,7 +95,7 @@ export default function UserList() {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem("adminToken");
+      const token = sessionStorage.getItem("adminToken");
       const res = await fetch(`http://15.135.216.211:5000/api/admin/deleteusers/${userId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },

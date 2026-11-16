@@ -68,7 +68,7 @@ export default function AdminLayout({ children }) {
     try {
       const staffRaw =
         sessionStorage.getItem("staffDetails") ||
-        localStorage.getItem("staffDetails");
+        sessionStorage.getItem("staffDetails");
 
       if (staffRaw) {
         syncDesktopWidget(JSON.parse(staffRaw));
