@@ -734,7 +734,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = 'http://15.135.216.211:5000/api';
 
 const startAuthenticatedWorkSession = async ({ token }) => {
   try {
