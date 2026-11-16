@@ -115,6 +115,7 @@ import TeamProjects from "./Pages/TeamProjects.js";
 import TeamMembers from "./Pages/TeamMembers.js";
 import MyDocuments from "./Pages/MyDocuments.js";
 import PunchWidgetPopup from "./Pages/PunchWidgetPopup.js";
+import StaffChat from "./Pages/Chat/StaffChat.js";
 
 
 
@@ -229,6 +230,7 @@ function App() {
               <Route path="/generatefacts" element={<FunFactsGenerator />} />
               <Route path="/generatenews" element={<NewsFetcher />} />
               <Route path="/myprofile" element={<StaffMyProfile />} />
+              <Route path="/chats" element={<StaffChat />}/>
               <Route path="/punch" element={<StaffPunchInOut />} />
               <Route path="/attendance" element={<AttendanceHistory />} />
               <Route path="/report" element={<MonthlyReport />} />

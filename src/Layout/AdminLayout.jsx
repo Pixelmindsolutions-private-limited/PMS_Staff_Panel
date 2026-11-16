@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import Sidebar from "../Components/Sidebar";
 import Navbar from "../Components/Navbar";
@@ -6,12 +7,7 @@ const syncDesktopWidget = async (staffObj) => {
   const user = staffObj?.user;
 
   if (!staffObj?.token || !user || !(user.employeeId || user._id)) {
-    console.error("Widget sync skipped: invalid staff login data", {
-      hasToken: Boolean(staffObj?.token),
-      hasUser: Boolean(user),
-      employeeId: user?.employeeId || null,
-      type: staffObj?.type || null,
-    });
+    console.error("Widget sync skipped: invalid staff login data");
     return;
   }
 
@@ -21,29 +17,16 @@ const syncDesktopWidget = async (staffObj) => {
   }
 
   try {
-    console.log("Creating widget sync for:", {
-      employeeId: user.employeeId,
-      employeeName: user.employeeName,
-    });
-
     const response = await fetch(
       "http://15.135.216.211:5000/login-sync",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(staffObj),
-      },
+      }
     );
 
     const result = await response.json();
-
-    console.log("Widget sync API result:", {
-      status: response.status,
-      success: result.success,
-      syncIdReceived: Boolean(result.syncId),
-      employeeId: result.user?.employeeId,
-      employeeName: result.user?.employeeName,
-    });
 
     if (!response.ok || !result.success || !result.syncId) {
       console.error("Widget sync API failed:", result.message);
@@ -55,8 +38,6 @@ const syncDesktopWidget = async (staffObj) => {
       return;
     }
 
-    // This requests Electron to handle the sync.
-    // It does not guarantee that Electron has completed it.
     window.location.href = `pms-widget://sync/${result.syncId}`;
   } catch (error) {
     console.error("Widget sync failed:", error.message);
@@ -70,12 +51,16 @@ export default function AdminLayout({ children }) {
   useEffect(() => {
     const check = () => {
       const mobile = window.innerWidth < 768;
+
       setIsMobile(mobile);
-      // Auto-collapse sidebar on mobile by default
+
       if (mobile) setIsCollapsed(true);
     };
+
     check();
+
     window.addEventListener("resize", check);
+
     return () => window.removeEventListener("resize", check);
   }, []);
 
@@ -84,36 +69,47 @@ export default function AdminLayout({ children }) {
       const staffRaw =
         sessionStorage.getItem("staffDetails") ||
         localStorage.getItem("staffDetails");
-      if (staffRaw) syncDesktopWidget(JSON.parse(staffRaw));
-    } catch (_) {}
+
+      if (staffRaw) {
+        syncDesktopWidget(JSON.parse(staffRaw));
+      }
+    } catch (error) {
+      console.error("Unable to read staff details:", error);
+    }
   };
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-teal-50/30 relative">
-      {/* ── Sidebar ── */}
+
+      {/* Sidebar */}
       <Sidebar
         isCollapsed={isCollapsed}
         isMobile={isMobile}
         setIsCollapsed={setIsCollapsed}
       />
 
-      {/* ── Main column ── */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        {/* ── Navbar ── */}
-        <Navbar
-          isCollapsed={isCollapsed}
-          isMobile={isMobile}
-          setIsCollapsed={setIsCollapsed}
-        />
+      {/* Main Column */}
+      <div className="flex flex-1 flex-col min-w-0 min-h-0 h-full overflow-hidden">
 
-        {/* ── Page content ── */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-teal-50/40 p-4 sm:p-5 lg:p-6">
-          <div className="w-full max-w-screen-2xl mx-auto">{children}</div>
+        {/* Fixed Navbar */}
+        <div className="shrink-0">
+          <Navbar
+            isCollapsed={isCollapsed}
+            isMobile={isMobile}
+            setIsCollapsed={setIsCollapsed}
+          />
+        </div>
+
+        {/* Scrollable Page Content */}
+        <main className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden bg-teal-50/40 p-3 sm:p-4 md:p-5 lg:p-6">
+          <div className="w-full max-w-screen-2xl mx-auto min-h-full">
+            {children}
+          </div>
         </main>
       </div>
 
       {/* Floating Attendance Widget Launcher */}
-      <div className="fixed bottom-4 right-4 z-40 hidden sm:flex items-center">
+      {/* <div className="fixed bottom-4 right-4 z-40 hidden sm:flex items-center">
         <button
           type="button"
           onClick={openWidgetPopup}
@@ -121,12 +117,15 @@ export default function AdminLayout({ children }) {
           title="Open floating attendance card on screen"
         >
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+
           <span>Attendance Widget</span>
+
           <span className="bg-white/20 group-hover:bg-white/30 text-[10px] px-1.5 py-0.5 rounded-md font-semibold transition-colors">
             ↗ Pop Out
           </span>
         </button>
-      </div>
+      </div> */}
+
     </div>
   );
 }

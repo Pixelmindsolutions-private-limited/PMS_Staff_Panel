@@ -96,6 +96,12 @@ const Sidebar = ({ isCollapsed, isMobile, setIsCollapsed }) => {
         { name: "Monthly Report", path: "/report" },
       ]
     },
+    {
+      icon: "ri-time-fill", name: "Groups & Chats", dropdown: [
+        { name: "Chats", path: "/chats" },
+      ]
+    },
+
     // {
     //   icon: "ri-task-fill", name: "Tasks", dropdown: [
     //     { name: "My Tasks", path: "/mytasks" },
