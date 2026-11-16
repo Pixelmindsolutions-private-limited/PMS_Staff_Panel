@@ -948,7 +948,7 @@ const AttendanceWidget = ({ isStandalonePopup = false, onClose }) => {
         } else {
           const idleForSec = (Date.now() - lastActivityTimeRef.current) / 1000;
 
-          if (idleForSec >= 30) {
+          if (idleForSec >= 120) {
             if (!isCurrentlyIdleRef.current) {
               isCurrentlyIdleRef.current = true;
               idleStartedAtRef.current = lastActivityTimeRef.current;
